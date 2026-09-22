@@ -12,7 +12,7 @@ def test_callback_data_stays_under_telegram_limit() -> None:
             for button in row:
                 assert button.callback_data
                 assert len(button.callback_data.encode()) <= 64
-    selected = ["top", "vers_bottom"]
+    selected = ["top", "bottom", "vers_bottom"]
     for row in fuck_position_keyboard(user_id, "female", selected).inline_keyboard:
         for button in row:
             assert button.callback_data

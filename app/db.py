@@ -8,7 +8,7 @@ from pathlib import Path
 
 import aiosqlite
 
-from app.positions import positions_from_storage, positions_to_json
+from app.positions import MAX_PROFILE_POSITIONS, positions_from_storage, positions_to_json
 
 
 def _utc_now() -> str:
@@ -21,7 +21,11 @@ class Profile:
     username: str | None
     first_name: str | None
     gender: str
-    position: str
+    positions: tuple[str, ...]
+
+    @property
+    def position(self) -> str:
+        return self.positions[0] if self.positions else ""
 
 
 @dataclass(frozen=True)
@@ -33,7 +37,22 @@ class QueueEntry:
     username: str | None
     first_name: str | None
     gender: str
-    position: str
+    positions: tuple[str, ...]
+
+    @property
+    def position(self) -> str:
+        return self.positions[0] if self.positions else ""
+
+
+def _positions_from_user_row(row: aiosqlite.Row) -> tuple[str, ...]:
+    keys = set(row.keys())
+    if "positions" in keys and row["positions"]:
+        parsed = positions_from_storage(row["positions"], max_count=MAX_PROFILE_POSITIONS)
+        if parsed:
+            return parsed
+    if "position" in keys and row["position"]:
+        return positions_from_storage(row["position"], max_count=MAX_PROFILE_POSITIONS)
+    return ()
 
 
 def _row_to_queue(row: aiosqlite.Row) -> QueueEntry:
@@ -48,7 +67,7 @@ def _row_to_queue(row: aiosqlite.Row) -> QueueEntry:
         username=row["username"],
         first_name=row["first_name"],
         gender=row["gender"],
-        position=row["position"],
+        positions=_positions_from_user_row(row),
     )
 
 
@@ -78,6 +97,7 @@ class Database:
                 first_name TEXT,
                 gender TEXT NOT NULL,
                 position TEXT NOT NULL,
+                positions TEXT NOT NULL DEFAULT '[]',
                 registered_at TEXT NOT NULL
             );
 
@@ -91,6 +111,7 @@ class Database:
             """
         )
         await self._migrate_queue()
+        await self._migrate_users()
         await self._db.commit()
 
     async def _migrate_queue(self) -> None:
@@ -109,6 +130,24 @@ class Database:
                         (json.dumps([row["wanted_position"]], ensure_ascii=False), row["user_id"]),
                     )
 
+    async def _migrate_users(self) -> None:
+        cur = await self.raw.execute("PRAGMA table_info(users)")
+        cols = {row["name"] for row in await cur.fetchall()}
+        if "positions" not in cols:
+            await self.raw.execute(
+                "ALTER TABLE users ADD COLUMN positions TEXT NOT NULL DEFAULT '[]'"
+            )
+            cur = await self.raw.execute("SELECT user_id, position FROM users")
+            rows = await cur.fetchall()
+            for row in rows:
+                await self.raw.execute(
+                    "UPDATE users SET positions = ? WHERE user_id = ?",
+                    (
+                        json.dumps([row["position"]], ensure_ascii=False) if row["position"] else "[]",
+                        row["user_id"],
+                    ),
+                )
+
     async def close(self) -> None:
         if self._db is not None:
             await self._db.close()
@@ -116,7 +155,7 @@ class Database:
 
     async def get_user(self, user_id: int) -> Profile | None:
         cur = await self.raw.execute(
-            "SELECT user_id, username, first_name, gender, position FROM users WHERE user_id = ?",
+            "SELECT user_id, username, first_name, gender, position, positions FROM users WHERE user_id = ?",
             (user_id,),
         )
         row = await cur.fetchone()
@@ -127,7 +166,7 @@ class Database:
             username=row["username"],
             first_name=row["first_name"],
             gender=row["gender"],
-            position=row["position"],
+            positions=_positions_from_user_row(row),
         )
 
     async def is_registered(self, user_id: int) -> bool:
@@ -140,19 +179,24 @@ class Database:
         username: str | None,
         first_name: str | None,
         gender: str,
-        position: str,
+        position: str | None = None,
+        positions: list[str] | tuple[str, ...] | None = None,
     ) -> None:
+        names = list(positions or ([position] if position else []))
+        payload = positions_to_json(names, max_count=MAX_PROFILE_POSITIONS)
+        primary = names[0] if names else ""
         await self.raw.execute(
             """
-            INSERT INTO users (user_id, username, first_name, gender, position, registered_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (user_id, username, first_name, gender, position, positions, registered_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 username = excluded.username,
                 first_name = excluded.first_name,
                 gender = excluded.gender,
-                position = excluded.position
+                position = excluded.position,
+                positions = excluded.positions
             """,
-            (user_id, username, first_name, gender, position, _utc_now()),
+            (user_id, username, first_name, gender, primary, payload, _utc_now()),
         )
         await self.raw.commit()
 
@@ -168,10 +212,11 @@ class Database:
         *,
         user_id: int,
         gender: str,
-        position: str,
+        positions: list[str] | tuple[str, ...],
         wanted_gender: str,
         wanted_positions: list[str] | tuple[str, ...],
     ) -> QueueEntry | None:
+        mine = set(positions)
         wanted = set(wanted_positions)
         cur = await self.raw.execute(
             """
@@ -183,7 +228,8 @@ class Database:
                 u.username,
                 u.first_name,
                 u.gender,
-                u.position
+                u.position,
+                u.positions
             FROM queue AS q
             INNER JOIN users AS u ON u.user_id = q.user_id
             WHERE q.user_id != ?
@@ -196,7 +242,7 @@ class Database:
         rows = await cur.fetchall()
         for row in rows:
             partner = _row_to_queue(row)
-            if partner.position in wanted and position in partner.wanted_positions:
+            if set(partner.positions) & wanted and mine & set(partner.wanted_positions):
                 return partner
         return None
 
@@ -237,7 +283,7 @@ class Database:
         *,
         user_id: int,
         gender: str,
-        position: str,
+        positions: list[str] | tuple[str, ...],
         wanted_gender: str,
         wanted_positions: list[str] | tuple[str, ...],
     ) -> QueueEntry | None:
@@ -245,7 +291,7 @@ class Database:
             partner = await self.find_match(
                 user_id=user_id,
                 gender=gender,
-                position=position,
+                positions=positions,
                 wanted_gender=wanted_gender,
                 wanted_positions=wanted_positions,
             )

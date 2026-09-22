@@ -4,6 +4,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.positions import (
     GENDER_CODES,
+    MAX_PROFILE_POSITIONS,
+    MAX_WANTED_POSITIONS,
     POSITION_CODES,
     POSITION_ORDER,
     encode_positions,
@@ -23,31 +25,15 @@ def gender_keyboard(prefix: str, user_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def position_keyboard(prefix: str, user_id: int, gender: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("تاپ", callback_data=f"{prefix}:pos:{user_id}:{gender}:top"),
-                InlineKeyboardButton("باتم", callback_data=f"{prefix}:pos:{user_id}:{gender}:bottom"),
-                InlineKeyboardButton("ورس", callback_data=f"{prefix}:pos:{user_id}:{gender}:vers"),
-            ],
-            [
-                InlineKeyboardButton(
-                    "ورس‌تاپ",
-                    callback_data=f"{prefix}:pos:{user_id}:{gender}:vers_top",
-                ),
-                InlineKeyboardButton(
-                    "ورس‌باتم",
-                    callback_data=f"{prefix}:pos:{user_id}:{gender}:vers_bottom",
-                ),
-            ],
-        ]
-    )
-
-
-def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> InlineKeyboardMarkup:
+def multi_position_keyboard(
+    prefix: str,
+    user_id: int,
+    gender: str,
+    selected: list[str],
+    max_count: int,
+) -> InlineKeyboardMarkup:
     gender_code = GENDER_CODES[gender]
-    encoded = encode_positions(selected) or "-"
+    encoded = encode_positions(selected, max_count=max_count) or "-"
     rows: list[list[InlineKeyboardButton]] = []
     current: list[InlineKeyboardButton] = []
     for name in POSITION_ORDER:
@@ -55,7 +41,7 @@ def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> In
         current.append(
             InlineKeyboardButton(
                 f"{POSITION_LABELS[name]}{mark}",
-                callback_data=f"fuck:tgl:{user_id}:{gender_code}:{POSITION_CODES[name]}:{encoded}",
+                callback_data=f"{prefix}:tgl:{user_id}:{gender_code}:{POSITION_CODES[name]}:{encoded}",
             )
         )
         if len(current) == 3:
@@ -63,16 +49,27 @@ def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> In
             current = []
     if current:
         rows.append(current)
-    confirm_label = f"ثبت انتخاب‌ها ({len(selected)}/2)"
     rows.append(
         [
             InlineKeyboardButton(
-                confirm_label,
-                callback_data=f"fuck:ok:{user_id}:{gender_code}:{encoded}",
+                f"ثبت انتخاب‌ها ({len(selected)}/{max_count})",
+                callback_data=f"{prefix}:ok:{user_id}:{gender_code}:{encoded}",
             )
         ]
     )
     return InlineKeyboardMarkup(rows)
+
+
+def register_position_keyboard(user_id: int, gender: str, selected: list[str]) -> InlineKeyboardMarkup:
+    return multi_position_keyboard("reg", user_id, gender, selected, MAX_PROFILE_POSITIONS)
+
+
+def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> InlineKeyboardMarkup:
+    return multi_position_keyboard("fuck", user_id, gender, selected, MAX_WANTED_POSITIONS)
+
+
+def position_keyboard(prefix: str, user_id: int, gender: str) -> InlineKeyboardMarkup:
+    return multi_position_keyboard(prefix, user_id, gender, [], MAX_PROFILE_POSITIONS)
 
 
 def fuck_queue_keyboard(user_id: int) -> InlineKeyboardMarkup:
