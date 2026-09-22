@@ -51,10 +51,10 @@ def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> In
     rows: list[list[InlineKeyboardButton]] = []
     current: list[InlineKeyboardButton] = []
     for name in POSITION_ORDER:
-        mark = "✅ " if name in selected else ""
+        mark = " ✅" if name in selected else ""
         current.append(
             InlineKeyboardButton(
-                f"{mark}{POSITION_LABELS[name]}",
+                f"{POSITION_LABELS[name]}{mark}",
                 callback_data=f"fuck:tgl:{user_id}:{gender_code}:{POSITION_CODES[name]}:{encoded}",
             )
         )
@@ -73,3 +73,20 @@ def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> In
         ]
     )
     return InlineKeyboardMarkup(rows)
+
+
+def fuck_queue_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("لغو درخواست", callback_data=f"fuck:cx:{user_id}")]]
+    )
+
+
+def fuck_cancel_confirm_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("بله، لغو کن", callback_data=f"fuck:cy:{user_id}"),
+                InlineKeyboardButton("نه، بمونه", callback_data=f"fuck:cn:{user_id}"),
+            ]
+        ]
+    )

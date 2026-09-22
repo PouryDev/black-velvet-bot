@@ -228,6 +228,10 @@ class Database:
         await self.raw.execute(f"DELETE FROM queue WHERE user_id IN ({placeholders})", user_ids)
         await self.raw.commit()
 
+    async def is_in_queue(self, user_id: int) -> bool:
+        cur = await self.raw.execute("SELECT 1 FROM queue WHERE user_id = ? LIMIT 1", (user_id,))
+        return await cur.fetchone() is not None
+
     async def match_or_enqueue(
         self,
         *,

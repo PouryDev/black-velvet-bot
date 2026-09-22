@@ -31,8 +31,14 @@ FUCK_POSITION_MAX = "بیشتر از ۳ گرایش نمی‌تونی انتخا�
 FUCK_WRONG_USER = "این درخواست مال تو نیست. خودت /fuck بزن."
 FUCK_QUEUED = (
     "کسی با این مشخصات الان تو صف نبود.\n"
-    "درخواستت ثبت شد؛ به محض اینکه یه {gender} با گرایش {position} مناسب پیدا بشه جفتتون رو تگ می‌کنم."
+    "درخواستت ثبت شد؛ به محض اینکه یه {gender} با گرایش {position} مناسب پیدا بشه جفتتون رو تگ می‌کنم.\n"
+    "برای لغو، دکمه پایین یا دستور /cancel را بزن."
 )
+FUCK_CANCEL_ASK = "مطمئنی می‌خوای درخواست fuck رو لغو کنی؟ این کار برگشت نداره."
+FUCK_CANCEL_DONE = "درخواست fuck لغو شد و از صف خارج شدی."
+FUCK_CANCEL_KEEP = "باشه، درخواستت تو صف موند."
+FUCK_CANCEL_NONE = "درخواست fuck فعالی تو صف نداری."
+FUCK_MATCHED = "مچ پیدا شد، برین حال کنین."
 FUCK_ALREADY_SAME_QUEUE = "همین درخواست از قبل تو صف بود. صبر کن تا یکی مچ بشه."
 CANCELLED = "کنسل شد. هر وقت خواستی دوباره /register یا /fuck بزن."
 PING_WELCOME = (
@@ -65,7 +71,9 @@ MATCH_LINES = [
 
 
 def match_caption(mention_a: str, mention_b: str, line: str) -> str:
-    return (
+    from app.rtl import ensure_rtl
+
+    return ensure_rtl(
         f"{mention_a} و {mention_b} باید با همدیگه fuck کنن 🔥\n\n"
         f"{line.format(a=mention_a, b=mention_b)}"
     )

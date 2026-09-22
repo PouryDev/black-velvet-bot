@@ -104,6 +104,33 @@ async def test_fifo_picks_first_compatible(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancel_removes_only_that_user(tmp_path: Path) -> None:
+    db = Database(str(tmp_path / "bot.db"))
+    await db.init()
+    await db.upsert_user(user_id=1, username="a", first_name="A", gender="male", position="top")
+    await db.upsert_user(user_id=2, username="b", first_name="B", gender="male", position="bottom")
+    await db.match_or_enqueue(
+        user_id=1,
+        gender="male",
+        position="top",
+        wanted_gender="male",
+        wanted_positions=["bottom"],
+    )
+    await db.match_or_enqueue(
+        user_id=2,
+        gender="male",
+        position="bottom",
+        wanted_gender="male",
+        wanted_positions=["vers"],
+    )
+    assert await db.is_in_queue(1)
+    await db.dequeue_users(1)
+    assert not await db.is_in_queue(1)
+    assert await db.is_in_queue(2)
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_match_uses_any_of_three_positions(tmp_path: Path) -> None:
     db = Database(str(tmp_path / "bot.db"))
     await db.init()
@@ -135,3 +162,7 @@ def test_twenty_match_lines() -> None:
         rendered = texts.match_caption("@one", "@two", line)
         assert "@one" in rendered and "@two" in rendered
         assert "fuck" in rendered.lower()
+        for part in rendered.split("\n"):
+            if not part.strip():
+                continue
+            assert "\u0600" <= part.lstrip()[0] <= "\u06ff"

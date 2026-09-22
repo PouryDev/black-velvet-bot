@@ -3,6 +3,7 @@ from __future__ import annotations
 from telegram.ext import ContextTypes
 
 from app.config import Settings
+from app.rtl import ensure_rtl
 
 
 async def send_to_group(
@@ -13,6 +14,6 @@ async def send_to_group(
     settings: Settings = context.bot_data["settings"]
     return await context.bot.send_message(
         chat_id=settings.allowed_group_id,
-        text=text,
+        text=ensure_rtl(text),
         **kwargs,
     )

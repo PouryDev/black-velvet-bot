@@ -9,6 +9,7 @@ from app.db import Database
 from app.group import send_to_group
 from app.keyboards import gender_keyboard, position_keyboard
 from app.mentions import mention_user
+from app.rtl import ensure_rtl
 
 PREFIX = "reg"
 
@@ -40,7 +41,7 @@ async def pick_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     await query.answer()
     await query.edit_message_text(
-        texts.REGISTER_PICK_POSITION,
+        ensure_rtl(texts.REGISTER_PICK_POSITION),
         reply_markup=position_keyboard(PREFIX, owner_id_int, gender),
     )
 
@@ -70,21 +71,16 @@ async def pick_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         position=position,
     )
     await query.edit_message_text(
-        texts.REGISTER_DONE.format(
-            gender=texts.GENDER_LABELS[gender],
-            position=texts.POSITION_LABELS[position],
+        ensure_rtl(
+            texts.REGISTER_DONE.format(
+                gender=texts.GENDER_LABELS[gender],
+                position=texts.POSITION_LABELS[position],
+            )
         )
     )
-
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.message is None:
-        return
-    await send_to_group(context, texts.CANCELLED)
 
 
 def add_handlers(application) -> None:
     application.add_handler(MessageHandler(command_filter("register"), start_register))
     application.add_handler(CallbackQueryHandler(pick_gender, pattern=rf"^{PREFIX}:gender:"))
     application.add_handler(CallbackQueryHandler(pick_position, pattern=rf"^{PREFIX}:pos:"))
-    application.add_handler(MessageHandler(command_filter("cancel"), cancel))
