@@ -1,20 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import load_settings
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("BOT_TOKEN", "123456:TESTTOKEN")
-    monkeypatch.setenv("ALLOWED_GROUP_ID", "-1001")
-    monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
-    monkeypatch.setenv("DB_PATH", str(tmp_path / "bot.db"))
-    monkeypatch.setenv(
-        "TELEGRAM_API_BASE",
-        "https://snowy-tree-5c79.pk74ever.workers.dev",
+    monkeypatch.setattr(
+        "app.main.load_settings",
+        lambda: replace(load_settings(), db_path=str(tmp_path / "bot.db")),
     )
 
     with (
@@ -46,7 +45,7 @@ def test_webhook_accepts_secret_with_200(client: TestClient) -> None:
     response = client.post(
         "/webhook",
         json={"update_id": 1},
-        headers={"X-Telegram-Bot-Api-Secret-Token": "s3cret"},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "long-random-secret"},
     )
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -58,7 +57,7 @@ def test_webhook_invalid_body_still_200(client: TestClient) -> None:
         content=b"not-json",
         headers={
             "Content-Type": "application/json",
-            "X-Telegram-Bot-Api-Secret-Token": "s3cret",
+            "X-Telegram-Bot-Api-Secret-Token": "long-random-secret",
         },
     )
     assert response.status_code == 200
