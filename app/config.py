@@ -1,28 +1,25 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-def _require(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
+BOT_TOKEN = "8562157615:AAE9aOQTaDVfRwxpVN_JHK1X72IFOFjNIeE"
+ALLOWED_GROUP_ID = -1004489388121
+WEBHOOK_URL = "https://black-velvet.pourydev.ir/webhook"
+WEBHOOK_SECRET = "long-random-secret"
+TELEGRAM_API_BASE = "https://snowy-tree-5c79.pk74ever.workers.dev"
+PORT = 8033
+DB_PATH = "/app/data/bot.db"
 
 
 @dataclass(frozen=True)
 class Settings:
-    bot_token: str
-    allowed_group_id: int
-    webhook_secret: str
-    telegram_api_base: str
-    port: int
-    db_path: str
+    bot_token: str = BOT_TOKEN
+    allowed_group_id: int = ALLOWED_GROUP_ID
+    webhook_url: str = WEBHOOK_URL
+    webhook_secret: str = WEBHOOK_SECRET
+    telegram_api_base: str = TELEGRAM_API_BASE
+    port: int = PORT
+    db_path: str = DB_PATH
 
     @property
     def bot_api_url(self) -> str:
@@ -34,14 +31,4 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    return Settings(
-        bot_token=_require("BOT_TOKEN"),
-        allowed_group_id=int(_require("ALLOWED_GROUP_ID")),
-        webhook_secret=os.getenv("WEBHOOK_SECRET", "").strip(),
-        telegram_api_base=os.getenv(
-            "TELEGRAM_API_BASE",
-            "https://snowy-tree-5c79.pk74ever.workers.dev",
-        ).rstrip("/"),
-        port=int(os.getenv("PORT", "8033")),
-        db_path=os.getenv("DB_PATH", "/app/data/bot.db"),
-    )
+    return Settings()

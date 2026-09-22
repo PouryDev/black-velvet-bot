@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from telegram import Update
-from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from app import texts
+from app.commands import command_filter
 from app.db import Database
+from app.group import send_to_group
 from app.keyboards import gender_keyboard, position_keyboard
+from app.mentions import mention_user
 
 PREFIX = "reg"
 
@@ -14,8 +17,10 @@ async def start_register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if update.message is None or update.effective_user is None:
         return
     user = update.effective_user
-    await update.message.reply_text(
-        texts.REGISTER_PICK_GENDER,
+    await send_to_group(
+        context,
+        f"{mention_user(user)}\n{texts.REGISTER_PICK_GENDER}",
+        parse_mode="HTML",
         reply_markup=gender_keyboard(PREFIX, user.id),
     )
 
@@ -73,12 +78,13 @@ async def pick_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.message:
-        await update.message.reply_text(texts.CANCELLED)
+    if update.message is None:
+        return
+    await send_to_group(context, texts.CANCELLED)
 
 
 def add_handlers(application) -> None:
-    application.add_handler(CommandHandler("register", start_register))
+    application.add_handler(MessageHandler(command_filter("register"), start_register))
     application.add_handler(CallbackQueryHandler(pick_gender, pattern=rf"^{PREFIX}:gender:"))
     application.add_handler(CallbackQueryHandler(pick_position, pattern=rf"^{PREFIX}:pos:"))
-    application.add_handler(CommandHandler("cancel", cancel))
+    application.add_handler(MessageHandler(command_filter("cancel"), cancel))

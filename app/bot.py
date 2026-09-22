@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from telegram.ext import Application, TypeHandler
+from telegram.ext import Application
 
 from app.config import Settings
 from app.db import Database
-from app.handlers import fuck, register
-from app.handlers.guards import leave_foreign_chats
+from app.handlers import fuck, ping, register
 
 
 async def on_error(update: object, context) -> None:
@@ -23,7 +22,7 @@ def build_application(settings: Settings, db: Database) -> Application:
     )
     application.bot_data["settings"] = settings
     application.bot_data["db"] = db
-    application.add_handler(TypeHandler(object, leave_foreign_chats), group=-1)
+    ping.add_handlers(application)
     register.add_handlers(application)
     fuck.add_handlers(application)
     application.add_error_handler(on_error)
