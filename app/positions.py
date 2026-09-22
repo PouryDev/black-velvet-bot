@@ -13,7 +13,7 @@ POSITION_CODES = {
 CODE_TO_POSITION = {code: name for name, code in POSITION_CODES.items()}
 GENDER_CODES = {"male": "m", "female": "f", "trans": "x"}
 CODE_TO_GENDER = {code: name for name, code in GENDER_CODES.items()}
-MAX_POSITIONS = 3
+MAX_POSITIONS = 2
 MIN_POSITIONS = 1
 
 

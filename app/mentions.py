@@ -12,9 +12,12 @@ def mention_user(user: User) -> str:
 
 
 def mention(user_id: int, username: str | None, first_name: str | None) -> str:
-    if username:
-        return f"@{username}"
-    label = html.escape(first_name or str(user_id))
+    if first_name:
+        label = html.escape(first_name)
+    elif username:
+        label = html.escape("@" + username)
+    else:
+        label = str(user_id)
     return f'<a href="tg://user?id={user_id}">{label}</a>'
 
 

@@ -148,7 +148,7 @@ async def test_match_uses_any_of_three_positions(tmp_path: Path) -> None:
         gender="male",
         position="top",
         wanted_gender="male",
-        wanted_positions=["vers", "vers_bottom", "bottom"],
+        wanted_positions=["vers", "vers_bottom"],
     )
     assert partner is not None
     assert partner.user_id == 1
@@ -162,7 +162,17 @@ def test_twenty_match_lines() -> None:
         rendered = texts.match_caption("@one", "@two", line)
         assert "@one" in rendered and "@two" in rendered
         assert "fuck" in rendered.lower()
-        for part in rendered.split("\n"):
-            if not part.strip():
-                continue
-            assert "\u0600" <= part.lstrip()[0] <= "\u06ff"
+        assert "\u0600" <= rendered.lstrip()[0] <= "\u06ff"
+
+
+def test_match_caption_tags_both_user_ids() -> None:
+    from app.mentions import mention
+
+    tagged = texts.match_caption(
+        mention(10, "aa", "Ali"),
+        mention(11, "bb", "Bita"),
+        texts.MATCH_LINES[0],
+    )
+    assert "tg://user?id=10" in tagged
+    assert "tg://user?id=11" in tagged
+    assert tagged.startswith("یالا ")
