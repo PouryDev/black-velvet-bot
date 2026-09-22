@@ -28,13 +28,11 @@ def create_app() -> FastAPI:
         await db.init()
         await application.initialize()
         await application.start()
-        await application.bot.set_webhook(
-            url=settings.webhook_url,
-            secret_token=settings.webhook_secret or None,
-            allowed_updates=["message", "callback_query", "my_chat_member"],
-            drop_pending_updates=True,
+        logger.info(
+            "bot is up on port %s; set webhook yourself to POST /webhook via %s",
+            settings.port,
+            settings.telegram_api_base,
         )
-        logger.info("webhook set to %s via %s", settings.webhook_url, settings.telegram_api_base)
         yield
         await application.stop()
         await application.shutdown()

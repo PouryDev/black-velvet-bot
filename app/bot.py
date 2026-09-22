@@ -24,7 +24,7 @@ def build_application(settings: Settings, db: Database) -> Application:
     application.bot_data["settings"] = settings
     application.bot_data["db"] = db
     application.add_handler(TypeHandler(object, leave_foreign_chats), group=-1)
-    application.add_handler(register.build_handler())
-    application.add_handler(fuck.build_handler())
+    register.add_handlers(application)
+    fuck.add_handlers(application)
     application.add_error_handler(on_error)
     return application

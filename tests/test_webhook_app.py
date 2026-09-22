@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("BOT_TOKEN", "123456:TESTTOKEN")
     monkeypatch.setenv("ALLOWED_GROUP_ID", "-1001")
-    monkeypatch.setenv("WEBHOOK_URL", "https://example.com/webhook")
     monkeypatch.setenv("WEBHOOK_SECRET", "s3cret")
     monkeypatch.setenv("DB_PATH", str(tmp_path / "bot.db"))
     monkeypatch.setenv(
@@ -23,7 +22,6 @@ def client(tmp_path, monkeypatch):
         patch("telegram.ext.Application.start", new_callable=AsyncMock),
         patch("telegram.ext.Application.stop", new_callable=AsyncMock),
         patch("telegram.ext.Application.shutdown", new_callable=AsyncMock),
-        patch("telegram.Bot.set_webhook", new_callable=AsyncMock),
         patch("telegram.ext.Application.process_update", new_callable=AsyncMock),
     ):
         from app.main import create_app

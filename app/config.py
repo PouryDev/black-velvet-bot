@@ -19,7 +19,6 @@ def _require(name: str) -> str:
 class Settings:
     bot_token: str
     allowed_group_id: int
-    webhook_url: str
     webhook_secret: str
     telegram_api_base: str
     port: int
@@ -38,7 +37,6 @@ def load_settings() -> Settings:
     return Settings(
         bot_token=_require("BOT_TOKEN"),
         allowed_group_id=int(_require("ALLOWED_GROUP_ID")),
-        webhook_url=_require("WEBHOOK_URL"),
         webhook_secret=os.getenv("WEBHOOK_SECRET", "").strip(),
         telegram_api_base=os.getenv(
             "TELEGRAM_API_BASE",
