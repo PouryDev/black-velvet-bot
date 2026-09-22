@@ -9,4 +9,3 @@ def test_hardcoded_settings() -> None:
     assert settings.telegram_api_base == TELEGRAM_API_BASE
     assert settings.db_path == "/app/data/bot.db"
     assert settings.bot_token
-    assert settings.webhook_secret == "long-random-secret"

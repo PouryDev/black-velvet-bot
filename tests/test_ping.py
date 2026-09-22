@@ -18,7 +18,6 @@ class DummyContext:
                 bot_token="token",
                 allowed_group_id=-1001,
                 webhook_url="https://example.com/webhook",
-                webhook_secret="secret",
                 telegram_api_base="https://example.com",
                 port=8033,
                 db_path="/tmp/bot.db",

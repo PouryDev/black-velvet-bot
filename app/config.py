@@ -5,7 +5,6 @@ from dataclasses import dataclass
 BOT_TOKEN = "8562157615:AAE9aOQTaDVfRwxpVN_JHK1X72IFOFjNIeE"
 ALLOWED_GROUP_ID = -1004489388121
 WEBHOOK_URL = "https://black-velvet.pourydev.ir/webhook"
-WEBHOOK_SECRET = "long-random-secret"
 TELEGRAM_API_BASE = "https://snowy-tree-5c79.pk74ever.workers.dev"
 PORT = 8033
 DB_PATH = "/app/data/bot.db"
@@ -16,7 +15,6 @@ class Settings:
     bot_token: str = BOT_TOKEN
     allowed_group_id: int = ALLOWED_GROUP_ID
     webhook_url: str = WEBHOOK_URL
-    webhook_secret: str = WEBHOOK_SECRET
     telegram_api_base: str = TELEGRAM_API_BASE
     port: int = PORT
     db_path: str = DB_PATH
