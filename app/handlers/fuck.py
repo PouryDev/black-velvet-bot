@@ -3,10 +3,12 @@ from __future__ import annotations
 import random
 
 from telegram import Update
-from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from app import texts
+from app.commands import command_filter
 from app.db import Database
+from app.group import send_to_group
 from app.keyboards import gender_keyboard, position_keyboard
 from app.mentions import mention_queue, mention_user
 
@@ -19,11 +21,17 @@ async def start_fuck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     db: Database = context.bot_data["db"]
     user = update.effective_user
     if not await db.is_registered(user.id):
-        await update.message.reply_text(texts.FUCK_NEED_REGISTER)
+        await send_to_group(
+            context,
+            f"{mention_user(user)}\n{texts.FUCK_NEED_REGISTER}",
+            parse_mode="HTML",
+        )
         return
     await db.touch_identity(user.id, user.username, user.first_name)
-    await update.message.reply_text(
-        texts.FUCK_PICK_GENDER,
+    await send_to_group(
+        context,
+        f"{mention_user(user)}\n{texts.FUCK_PICK_GENDER}",
+        parse_mode="HTML",
         reply_markup=gender_keyboard(PREFIX, user.id),
     )
 
@@ -89,10 +97,10 @@ async def pick_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     line = random.choice(texts.MATCH_LINES)
     caption = texts.match_caption(mention_user(user), mention_queue(partner), line)
     await query.edit_message_text("مچ پیدا شد 🔥")
-    await query.message.chat.send_message(caption, parse_mode="HTML")
+    await send_to_group(context, caption, parse_mode="HTML")
 
 
 def add_handlers(application) -> None:
-    application.add_handler(CommandHandler("fuck", start_fuck))
+    application.add_handler(MessageHandler(command_filter("fuck"), start_fuck))
     application.add_handler(CallbackQueryHandler(pick_gender, pattern=rf"^{PREFIX}:gender:"))
     application.add_handler(CallbackQueryHandler(pick_position, pattern=rf"^{PREFIX}:pos:"))

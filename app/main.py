@@ -4,7 +4,8 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi import FastAPI, Header, Request
+from fastapi.responses import JSONResponse
 from telegram import Update
 
 from app.bot import build_application
@@ -16,6 +17,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger("black-velvet")
+
+def ok_response() -> JSONResponse:
+    return JSONResponse(content={"ok": True}, status_code=200)
 
 
 def create_app() -> FastAPI:
@@ -48,15 +52,18 @@ def create_app() -> FastAPI:
     async def telegram_webhook(
         request: Request,
         x_telegram_bot_api_secret_token: str | None = Header(default=None),
-    ) -> Response:
-        if settings.webhook_secret and x_telegram_bot_api_secret_token != settings.webhook_secret:
-            raise HTTPException(status_code=403, detail="bad secret")
-        payload = await request.json()
-        update = Update.de_json(payload, application.bot)
-        if update is None:
-            raise HTTPException(status_code=400, detail="invalid update")
-        await application.process_update(update)
-        return Response(status_code=204)
+    ) -> JSONResponse:
+        try:
+            if settings.webhook_secret and x_telegram_bot_api_secret_token != settings.webhook_secret:
+                logger.warning("webhook secret mismatch; acknowledging without processing")
+                return ok_response()
+            payload = await request.json()
+            update = Update.de_json(payload, application.bot)
+            if update is not None:
+                await application.process_update(update)
+        except Exception:
+            logger.exception("webhook processing failed")
+        return ok_response()
 
     return api
 

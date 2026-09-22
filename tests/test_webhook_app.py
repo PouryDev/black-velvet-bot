@@ -36,15 +36,30 @@ def test_health(client: TestClient) -> None:
     assert response.json() == {"ok": True}
 
 
-def test_webhook_rejects_bad_secret(client: TestClient) -> None:
+def test_webhook_bad_secret_still_200(client: TestClient) -> None:
     response = client.post("/webhook", json={"update_id": 1})
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
 
 
-def test_webhook_accepts_secret(client: TestClient) -> None:
+def test_webhook_accepts_secret_with_200(client: TestClient) -> None:
     response = client.post(
         "/webhook",
         json={"update_id": 1},
         headers={"X-Telegram-Bot-Api-Secret-Token": "s3cret"},
     )
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+def test_webhook_invalid_body_still_200(client: TestClient) -> None:
+    response = client.post(
+        "/webhook",
+        content=b"not-json",
+        headers={
+            "Content-Type": "application/json",
+            "X-Telegram-Bot-Api-Secret-Token": "s3cret",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
