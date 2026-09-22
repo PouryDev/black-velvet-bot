@@ -1,0 +1,6 @@
+python-telegram-bot==21.10
+fastapi==0.115.8
+uvicorn==0.34.0
+python-dotenv==1.0.1
+aiosqlite==0.21.0
+httpx==0.28.1
