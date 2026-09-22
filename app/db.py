@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 import aiosqlite
+
+from app.positions import positions_from_storage, positions_to_json
 
 
 def _utc_now() -> str:
@@ -25,12 +28,28 @@ class Profile:
 class QueueEntry:
     user_id: int
     wanted_gender: str
-    wanted_position: str
+    wanted_positions: tuple[str, ...]
     queued_at: str
     username: str | None
     first_name: str | None
     gender: str
     position: str
+
+
+def _row_to_queue(row: aiosqlite.Row) -> QueueEntry:
+    stored = row["wanted_positions"]
+    if not stored:
+        stored = row["wanted_position"] if "wanted_position" in row.keys() else "[]"
+    return QueueEntry(
+        user_id=row["user_id"],
+        wanted_gender=row["wanted_gender"],
+        wanted_positions=positions_from_storage(stored),
+        queued_at=row["queued_at"],
+        username=row["username"],
+        first_name=row["first_name"],
+        gender=row["gender"],
+        position=row["position"],
+    )
 
 
 class Database:
@@ -65,13 +84,30 @@ class Database:
             CREATE TABLE IF NOT EXISTS queue (
                 user_id INTEGER PRIMARY KEY,
                 wanted_gender TEXT NOT NULL,
-                wanted_position TEXT NOT NULL,
+                wanted_positions TEXT NOT NULL,
                 queued_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             );
             """
         )
+        await self._migrate_queue()
         await self._db.commit()
+
+    async def _migrate_queue(self) -> None:
+        cur = await self.raw.execute("PRAGMA table_info(queue)")
+        cols = {row["name"] for row in await cur.fetchall()}
+        if "wanted_positions" not in cols:
+            await self.raw.execute(
+                "ALTER TABLE queue ADD COLUMN wanted_positions TEXT NOT NULL DEFAULT '[]'"
+            )
+            if "wanted_position" in cols:
+                cur = await self.raw.execute("SELECT user_id, wanted_position FROM queue")
+                rows = await cur.fetchall()
+                for row in rows:
+                    await self.raw.execute(
+                        "UPDATE queue SET wanted_positions = ? WHERE user_id = ?",
+                        (json.dumps([row["wanted_position"]], ensure_ascii=False), row["user_id"]),
+                    )
 
     async def close(self) -> None:
         if self._db is not None:
@@ -134,14 +170,15 @@ class Database:
         gender: str,
         position: str,
         wanted_gender: str,
-        wanted_position: str,
+        wanted_positions: list[str] | tuple[str, ...],
     ) -> QueueEntry | None:
+        wanted = set(wanted_positions)
         cur = await self.raw.execute(
             """
             SELECT
                 q.user_id,
                 q.wanted_gender,
-                q.wanted_position,
+                q.wanted_positions,
                 q.queued_at,
                 u.username,
                 u.first_name,
@@ -151,45 +188,36 @@ class Database:
             INNER JOIN users AS u ON u.user_id = q.user_id
             WHERE q.user_id != ?
               AND u.gender = ?
-              AND u.position = ?
               AND q.wanted_gender = ?
-              AND q.wanted_position = ?
             ORDER BY q.queued_at ASC
-            LIMIT 1
             """,
-            (user_id, wanted_gender, wanted_position, gender, position),
+            (user_id, wanted_gender, gender),
         )
-        row = await cur.fetchone()
-        if row is None:
-            return None
-        return QueueEntry(
-            user_id=row["user_id"],
-            wanted_gender=row["wanted_gender"],
-            wanted_position=row["wanted_position"],
-            queued_at=row["queued_at"],
-            username=row["username"],
-            first_name=row["first_name"],
-            gender=row["gender"],
-            position=row["position"],
-        )
+        rows = await cur.fetchall()
+        for row in rows:
+            partner = _row_to_queue(row)
+            if partner.position in wanted and position in partner.wanted_positions:
+                return partner
+        return None
 
     async def enqueue(
         self,
         *,
         user_id: int,
         wanted_gender: str,
-        wanted_position: str,
+        wanted_positions: list[str] | tuple[str, ...],
     ) -> None:
+        payload = positions_to_json(wanted_positions)
         await self.raw.execute(
             """
-            INSERT INTO queue (user_id, wanted_gender, wanted_position, queued_at)
+            INSERT INTO queue (user_id, wanted_gender, wanted_positions, queued_at)
             VALUES (?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 wanted_gender = excluded.wanted_gender,
-                wanted_position = excluded.wanted_position,
+                wanted_positions = excluded.wanted_positions,
                 queued_at = excluded.queued_at
             """,
-            (user_id, wanted_gender, wanted_position, _utc_now()),
+            (user_id, wanted_gender, payload, _utc_now()),
         )
         await self.raw.commit()
 
@@ -200,6 +228,10 @@ class Database:
         await self.raw.execute(f"DELETE FROM queue WHERE user_id IN ({placeholders})", user_ids)
         await self.raw.commit()
 
+    async def is_in_queue(self, user_id: int) -> bool:
+        cur = await self.raw.execute("SELECT 1 FROM queue WHERE user_id = ? LIMIT 1", (user_id,))
+        return await cur.fetchone() is not None
+
     async def match_or_enqueue(
         self,
         *,
@@ -207,7 +239,7 @@ class Database:
         gender: str,
         position: str,
         wanted_gender: str,
-        wanted_position: str,
+        wanted_positions: list[str] | tuple[str, ...],
     ) -> QueueEntry | None:
         async with self._lock:
             partner = await self.find_match(
@@ -215,7 +247,7 @@ class Database:
                 gender=gender,
                 position=position,
                 wanted_gender=wanted_gender,
-                wanted_position=wanted_position,
+                wanted_positions=wanted_positions,
             )
             if partner is not None:
                 await self.dequeue_users(user_id, partner.user_id)
@@ -223,6 +255,6 @@ class Database:
             await self.enqueue(
                 user_id=user_id,
                 wanted_gender=wanted_gender,
-                wanted_position=wanted_position,
+                wanted_positions=wanted_positions,
             )
             return None

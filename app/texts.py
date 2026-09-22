@@ -22,12 +22,23 @@ REGISTER_DONE = "ثبت شدی ✅\nجنسیت: {gender}\nپوزیشن: {positio
 REGISTER_WRONG_USER = "این دکمه‌ها مال تو نیست. خودت /register بزن."
 FUCK_NEED_REGISTER = MUST_REGISTER
 FUCK_PICK_GENDER = "پارتنری که می‌خوای چه جنسیتی باشه؟"
-FUCK_PICK_POSITION = "پوزیشن پارتنری که می‌خوای چی باشه؟"
+FUCK_PICK_POSITION = (
+    "گرایش/پوزیشن پارتنر رو انتخاب کن (حداقل ۱، حداکثر ۳).\n"
+    "دوباره زدن همون دکمه انتخاب رو برمی‌داره. بعد «ثبت انتخاب‌ها» رو بزن."
+)
+FUCK_POSITION_MIN = "حداقل یک گرایش باید انتخاب کنی."
+FUCK_POSITION_MAX = "بیشتر از ۳ گرایش نمی‌تونی انتخاب کنی."
 FUCK_WRONG_USER = "این درخواست مال تو نیست. خودت /fuck بزن."
 FUCK_QUEUED = (
     "کسی با این مشخصات الان تو صف نبود.\n"
-    "درخواستت ثبت شد؛ به محض اینکه یه {gender} {position} مناسب پیدا بشه جفتتون رو تگ می‌کنم."
+    "درخواستت ثبت شد؛ به محض اینکه یه {gender} با گرایش {position} مناسب پیدا بشه جفتتون رو تگ می‌کنم.\n"
+    "برای لغو، دکمه پایین یا دستور /cancel را بزن."
 )
+FUCK_CANCEL_ASK = "مطمئنی می‌خوای درخواست fuck رو لغو کنی؟ این کار برگشت نداره."
+FUCK_CANCEL_DONE = "درخواست fuck لغو شد و از صف خارج شدی."
+FUCK_CANCEL_KEEP = "باشه، درخواستت تو صف موند."
+FUCK_CANCEL_NONE = "درخواست fuck فعالی تو صف نداری."
+FUCK_MATCHED = "مچ پیدا شد، برین حال کنین."
 FUCK_ALREADY_SAME_QUEUE = "همین درخواست از قبل تو صف بود. صبر کن تا یکی مچ بشه."
 CANCELLED = "کنسل شد. هر وقت خواستی دوباره /register یا /fuck بزن."
 PING_WELCOME = (
@@ -60,7 +71,9 @@ MATCH_LINES = [
 
 
 def match_caption(mention_a: str, mention_b: str, line: str) -> str:
-    return (
+    from app.rtl import ensure_rtl
+
+    return ensure_rtl(
         f"{mention_a} و {mention_b} باید با همدیگه fuck کنن 🔥\n\n"
         f"{line.format(a=mention_a, b=mention_b)}"
     )
