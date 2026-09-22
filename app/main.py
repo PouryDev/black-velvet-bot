@@ -63,16 +63,13 @@ def create_app() -> FastAPI:
     return api
 
 
-app = create_app()
-
-
 def main() -> None:
     settings = load_settings()
     uvicorn.run(
-        "app.main:app",
+        "app.main:create_app",
         host="0.0.0.0",
         port=settings.port,
-        factory=False,
+        factory=True,
     )
 
 
