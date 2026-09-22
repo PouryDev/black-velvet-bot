@@ -29,7 +29,6 @@ def _settings() -> Settings:
     return Settings(
         bot_token="token",
         allowed_group_id=-1001,
-        webhook_url="https://example.com/webhook",
         webhook_secret="secret",
         telegram_api_base="https://snowy-tree-5c79.pk74ever.workers.dev",
         port=8033,
