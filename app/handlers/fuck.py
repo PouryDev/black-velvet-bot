@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from app import texts
+from app.callbacks import parse_owner
 from app.commands import command_filter
 from app.db import Database
 from app.group import send_to_group
@@ -17,9 +18,8 @@ from app.keyboards import (
 )
 from app.mentions import mention_queue, mention_user
 from app.positions import (
-    CODE_TO_GENDER,
     CODE_TO_POSITION,
-    MAX_POSITIONS,
+    MAX_WANTED_POSITIONS,
     MIN_POSITIONS,
     decode_positions,
     toggle_position,
@@ -74,26 +74,11 @@ async def pick_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-def _parse_owner(query_data: str, expected_kind: str) -> tuple[int, str, str] | None:
-    parts = query_data.split(":")
-    if len(parts) < 4 or parts[0] != PREFIX or parts[1] != expected_kind:
-        return None
-    try:
-        owner_id = int(parts[2])
-    except ValueError:
-        return None
-    gender = CODE_TO_GENDER.get(parts[3])
-    if gender is None:
-        return None
-    rest = ":".join(parts[4:]) if len(parts) > 4 else ""
-    return owner_id, gender, rest
-
-
 async def toggle_wanted_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query is None or query.from_user is None or query.data is None:
         return
-    parsed = _parse_owner(query.data, "tgl")
+    parsed = parse_owner(query.data, PREFIX, "tgl")
     if parsed is None:
         await query.answer()
         return
@@ -110,11 +95,11 @@ async def toggle_wanted_position(update: Update, context: ContextTypes.DEFAULT_T
     if position is None:
         await query.answer()
         return
-    selected = decode_positions("" if encoded == "-" else encoded)
-    if position not in selected and len(selected) >= MAX_POSITIONS:
+    selected = decode_positions("" if encoded == "-" else encoded, max_count=MAX_WANTED_POSITIONS)
+    if position not in selected and len(selected) >= MAX_WANTED_POSITIONS:
         await query.answer(texts.FUCK_POSITION_MAX, show_alert=True)
         return
-    updated = toggle_position(selected, position)
+    updated = toggle_position(selected, position, MAX_WANTED_POSITIONS)
     await query.answer()
     await query.edit_message_text(
         ensure_rtl(texts.FUCK_PICK_POSITION),
@@ -126,7 +111,7 @@ async def confirm_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     if query is None or query.from_user is None or query.data is None or query.message is None:
         return
-    parsed = _parse_owner(query.data, "ok")
+    parsed = parse_owner(query.data, PREFIX, "ok")
     if parsed is None:
         await query.answer()
         return
@@ -134,7 +119,7 @@ async def confirm_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if query.from_user.id != owner_id:
         await query.answer(texts.FUCK_WRONG_USER, show_alert=True)
         return
-    wanted_positions = decode_positions("" if encoded == "-" else encoded)
+    wanted_positions = decode_positions("" if encoded == "-" else encoded, max_count=MAX_WANTED_POSITIONS)
     if len(wanted_positions) < MIN_POSITIONS:
         await query.answer(texts.FUCK_POSITION_MIN, show_alert=True)
         return
@@ -150,7 +135,7 @@ async def confirm_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     partner = await db.match_or_enqueue(
         user_id=user.id,
         gender=profile.gender,
-        position=profile.position,
+        positions=profile.positions,
         wanted_gender=wanted_gender,
         wanted_positions=wanted_positions,
     )

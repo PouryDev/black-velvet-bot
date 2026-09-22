@@ -18,7 +18,7 @@ async def test_two_way_match_and_dequeue(tmp_path: Path) -> None:
     waiting = await db.match_or_enqueue(
         user_id=1,
         gender="male",
-        position="top",
+        positions=["top"],
         wanted_gender="male",
         wanted_positions=["bottom", "vers_bottom"],
     )
@@ -27,7 +27,7 @@ async def test_two_way_match_and_dequeue(tmp_path: Path) -> None:
     partner = await db.match_or_enqueue(
         user_id=2,
         gender="male",
-        position="bottom",
+        positions=["bottom"],
         wanted_gender="male",
         wanted_positions=["top", "vers"],
     )
@@ -49,14 +49,14 @@ async def test_no_match_when_wanted_position_differs(tmp_path: Path) -> None:
     await db.match_or_enqueue(
         user_id=1,
         gender="female",
-        position="top",
+        positions=["top"],
         wanted_gender="female",
         wanted_positions=["vers"],
     )
     partner = await db.match_or_enqueue(
         user_id=2,
         gender="female",
-        position="bottom",
+        positions=["bottom"],
         wanted_gender="female",
         wanted_positions=["top"],
     )
@@ -77,21 +77,21 @@ async def test_fifo_picks_first_compatible(tmp_path: Path) -> None:
     await db.match_or_enqueue(
         user_id=10,
         gender="trans",
-        position="vers",
+        positions=["vers"],
         wanted_gender="male",
         wanted_positions=["top"],
     )
     await db.match_or_enqueue(
         user_id=11,
         gender="trans",
-        position="vers",
+        positions=["vers"],
         wanted_gender="male",
         wanted_positions=["top"],
     )
     partner = await db.match_or_enqueue(
         user_id=12,
         gender="male",
-        position="top",
+        positions=["top"],
         wanted_gender="trans",
         wanted_positions=["vers", "vers_bottom"],
     )
@@ -112,14 +112,14 @@ async def test_cancel_removes_only_that_user(tmp_path: Path) -> None:
     await db.match_or_enqueue(
         user_id=1,
         gender="male",
-        position="top",
+        positions=["top"],
         wanted_gender="male",
         wanted_positions=["bottom"],
     )
     await db.match_or_enqueue(
         user_id=2,
         gender="male",
-        position="bottom",
+        positions=["bottom"],
         wanted_gender="male",
         wanted_positions=["vers"],
     )
@@ -139,16 +139,53 @@ async def test_match_uses_any_of_three_positions(tmp_path: Path) -> None:
     await db.match_or_enqueue(
         user_id=1,
         gender="male",
-        position="vers_bottom",
+        positions=["vers_bottom"],
         wanted_gender="male",
         wanted_positions=["top", "bottom"],
     )
     partner = await db.match_or_enqueue(
         user_id=2,
         gender="male",
-        position="top",
+        positions=["top"],
         wanted_gender="male",
         wanted_positions=["vers", "vers_bottom"],
+    )
+    assert partner is not None
+    assert partner.user_id == 1
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_profile_two_positions_match_wanted_three(tmp_path: Path) -> None:
+    db = Database(str(tmp_path / "bot.db"))
+    await db.init()
+    await db.upsert_user(
+        user_id=1,
+        username="a",
+        first_name="A",
+        gender="male",
+        positions=["top", "vers"],
+    )
+    await db.upsert_user(
+        user_id=2,
+        username="b",
+        first_name="B",
+        gender="male",
+        positions=["bottom", "vers_bottom"],
+    )
+    await db.match_or_enqueue(
+        user_id=1,
+        gender="male",
+        positions=["top", "vers"],
+        wanted_gender="male",
+        wanted_positions=["bottom", "vers_bottom", "vers"],
+    )
+    partner = await db.match_or_enqueue(
+        user_id=2,
+        gender="male",
+        positions=["bottom", "vers_bottom"],
+        wanted_gender="male",
+        wanted_positions=["vers", "top"],
     )
     assert partner is not None
     assert partner.user_id == 1
