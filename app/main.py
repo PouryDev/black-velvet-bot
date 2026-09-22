@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Header, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from telegram import Update
 
@@ -49,14 +49,8 @@ def create_app() -> FastAPI:
         return {"ok": True}
 
     @api.post("/webhook")
-    async def telegram_webhook(
-        request: Request,
-        x_telegram_bot_api_secret_token: str | None = Header(default=None),
-    ) -> JSONResponse:
+    async def telegram_webhook(request: Request) -> JSONResponse:
         try:
-            if settings.webhook_secret and x_telegram_bot_api_secret_token != settings.webhook_secret:
-                logger.warning("webhook secret mismatch; acknowledging without processing")
-                return ok_response()
             payload = await request.json()
             update = Update.de_json(payload, application.bot)
             if update is not None:
