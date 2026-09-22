@@ -9,10 +9,22 @@ from app import texts
 from app.commands import command_filter
 from app.db import Database
 from app.group import send_to_group
-from app.keyboards import gender_keyboard, position_keyboard
+from app.keyboards import fuck_position_keyboard, gender_keyboard
 from app.mentions import mention_queue, mention_user
+from app.positions import (
+    CODE_TO_GENDER,
+    CODE_TO_POSITION,
+    MAX_POSITIONS,
+    MIN_POSITIONS,
+    decode_positions,
+    toggle_position,
+)
 
 PREFIX = "fuck"
+
+
+def _format_positions(positions: list[str] | tuple[str, ...]) -> str:
+    return "، ".join(texts.POSITION_LABELS[name] for name in positions)
 
 
 async def start_fuck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -52,22 +64,73 @@ async def pick_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await query.answer()
     await query.edit_message_text(
         texts.FUCK_PICK_POSITION,
-        reply_markup=position_keyboard(PREFIX, owner_id_int, gender),
+        reply_markup=fuck_position_keyboard(owner_id_int, gender, []),
     )
 
 
-async def pick_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+def _parse_owner(query_data: str, expected_kind: str) -> tuple[int, str, str] | None:
+    parts = query_data.split(":")
+    if len(parts) < 4 or parts[0] != PREFIX or parts[1] != expected_kind:
+        return None
+    try:
+        owner_id = int(parts[2])
+    except ValueError:
+        return None
+    gender = CODE_TO_GENDER.get(parts[3])
+    if gender is None:
+        return None
+    rest = ":".join(parts[4:]) if len(parts) > 4 else ""
+    return owner_id, gender, rest
+
+
+async def toggle_wanted_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    if query is None or query.from_user is None or query.data is None or query.message is None:
+    if query is None or query.from_user is None or query.data is None:
+        return
+    parsed = _parse_owner(query.data, "tgl")
+    if parsed is None:
+        await query.answer()
+        return
+    owner_id, gender, rest = parsed
+    if query.from_user.id != owner_id:
+        await query.answer(texts.FUCK_WRONG_USER, show_alert=True)
         return
     try:
-        _, _, owner_id, wanted_gender, wanted_position = query.data.split(":", 4)
-        owner_id_int = int(owner_id)
+        code, encoded = rest.split(":", 1)
     except ValueError:
         await query.answer()
         return
-    if query.from_user.id != owner_id_int:
+    position = CODE_TO_POSITION.get(code)
+    if position is None:
+        await query.answer()
+        return
+    selected = decode_positions("" if encoded == "-" else encoded)
+    if position not in selected and len(selected) >= MAX_POSITIONS:
+        await query.answer(texts.FUCK_POSITION_MAX, show_alert=True)
+        return
+    updated = toggle_position(selected, position)
+    await query.answer()
+    await query.edit_message_text(
+        texts.FUCK_PICK_POSITION,
+        reply_markup=fuck_position_keyboard(owner_id, gender, updated),
+    )
+
+
+async def confirm_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None or query.from_user is None or query.data is None or query.message is None:
+        return
+    parsed = _parse_owner(query.data, "ok")
+    if parsed is None:
+        await query.answer()
+        return
+    owner_id, wanted_gender, encoded = parsed
+    if query.from_user.id != owner_id:
         await query.answer(texts.FUCK_WRONG_USER, show_alert=True)
+        return
+    wanted_positions = decode_positions("" if encoded == "-" else encoded)
+    if len(wanted_positions) < MIN_POSITIONS:
+        await query.answer(texts.FUCK_POSITION_MIN, show_alert=True)
         return
     await query.answer()
 
@@ -83,13 +146,13 @@ async def pick_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         gender=profile.gender,
         position=profile.position,
         wanted_gender=wanted_gender,
-        wanted_position=wanted_position,
+        wanted_positions=wanted_positions,
     )
     if partner is None:
         await query.edit_message_text(
             texts.FUCK_QUEUED.format(
                 gender=texts.GENDER_LABELS[wanted_gender],
-                position=texts.POSITION_LABELS[wanted_position],
+                position=_format_positions(wanted_positions),
             )
         )
         return
@@ -103,4 +166,5 @@ async def pick_position(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 def add_handlers(application) -> None:
     application.add_handler(MessageHandler(command_filter("fuck"), start_fuck))
     application.add_handler(CallbackQueryHandler(pick_gender, pattern=rf"^{PREFIX}:gender:"))
-    application.add_handler(CallbackQueryHandler(pick_position, pattern=rf"^{PREFIX}:pos:"))
+    application.add_handler(CallbackQueryHandler(toggle_wanted_position, pattern=rf"^{PREFIX}:tgl:"))
+    application.add_handler(CallbackQueryHandler(confirm_positions, pattern=rf"^{PREFIX}:ok:"))
