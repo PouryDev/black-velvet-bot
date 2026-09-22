@@ -168,8 +168,8 @@ async def confirm_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     line = random.choice(texts.MATCH_LINES)
     caption = texts.match_caption(mention_user(user), mention_queue(partner), line)
-    await query.edit_message_text(ensure_rtl(texts.FUCK_MATCHED))
     await send_to_group(context, caption, parse_mode="HTML")
+    await query.edit_message_text(ensure_rtl(texts.FUCK_MATCHED))
 
 
 def _owner_from_simple(query_data: str, kind: str) -> int | None:

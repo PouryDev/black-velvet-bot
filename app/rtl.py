@@ -12,15 +12,12 @@ def _is_persian_letter(char: str) -> bool:
     )
 
 
-def _rtl_line(line: str) -> str:
-    stripped = line.lstrip()
-    if not stripped:
-        return line
-    if _is_persian_letter(stripped[0]):
-        return line
-    leading = line[: len(line) - len(stripped)]
-    return f"{leading}خب {stripped}"
-
-
 def ensure_rtl(text: str) -> str:
-    return "\n".join(_rtl_line(part) for part in text.split("\n"))
+    """Keep Telegram RTL without rewriting every line (that breaks wrapping)."""
+    stripped = text.lstrip()
+    if not stripped:
+        return text
+    if _is_persian_letter(stripped[0]):
+        return text
+    leading = text[: len(text) - len(stripped)]
+    return f"{leading}یالا {stripped}"

@@ -63,7 +63,7 @@ def fuck_position_keyboard(user_id: int, gender: str, selected: list[str]) -> In
             current = []
     if current:
         rows.append(current)
-    confirm_label = f"ثبت انتخاب‌ها ({len(selected)}/3)"
+    confirm_label = f"ثبت انتخاب‌ها ({len(selected)}/2)"
     rows.append(
         [
             InlineKeyboardButton(
