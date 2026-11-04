@@ -10,9 +10,22 @@ from telegram import ReplyParameters, Update
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from app.community import Community
-from app.community_store import WEEK
+from app.community_store import DAY, WEEK
 
 logger = logging.getLogger(__name__)
+
+
+def _permission_error(error: Exception) -> bool:
+    if isinstance(error, Forbidden):
+        return True
+    if not isinstance(error, BadRequest):
+        return False
+    description = str(error).lower().replace("_", " ")
+    return any(phrase in description for phrase in (
+        "not enough rights", "administrator rights", "not an administrator",
+        "chat admin required", "not enough permissions", "have no rights",
+        "bot is not a member",
+    ))
 
 
 class Delivery:
@@ -177,6 +190,18 @@ class Delivery:
                     delay = (retry.total_seconds() if isinstance(retry, timedelta) else retry) + 1
                 await self.store.execute("UPDATE outbox SET status=?,attempts=attempts+1,next_attempt=?,last_error=? WHERE id=?",
                                          ("failed" if permanent else "pending", time.time() + delay, type(error).__name__, row["id"]))
+                if row["method"] == "inactivity_ban" and _permission_error(error):
+                    settings = self.community.settings
+                    # One durable reminder per group/day, even if many members need a ban.
+                    await self.store.emit(
+                        f"ban-permission:{settings.allowed_group_id}:{int(time.time() // DAY)}",
+                        "send_message", chat_id=settings.admin_group_id,
+                        text=(
+                            "بن خودکار به دلیل نداشتن دسترسی انجام نشد.\n"
+                            f"لطفاً ربات را در گروه اصلی ({settings.allowed_group_id}) ادمین کنید "
+                            "و مجوز Ban users (بن کردن اعضا) را بدهید."
+                        ),
+                    )
                 if permanent and row["method"] in {"role_turn", "session_notice"}:
                     session = await self.store.one("SELECT * FROM role_sessions WHERE id=? AND status='active'", (payload["session_id"],))
                     if session:

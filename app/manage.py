@@ -13,16 +13,10 @@ from app.config import load_settings
 
 async def register_webhook() -> None:
     settings = load_settings()
-    if not settings.bot_token or not settings.webhook_secret or not settings.admin_group_id:
+    if not settings.bot_token or not settings.webhook_secret:
         raise SystemExit("Set BOT_TOKEN and WEBHOOK_SECRET first")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     async with Bot(settings.bot_token, base_url=settings.bot_api_url, base_file_url=settings.bot_file_api_url) as bot:
-        for group_id in (settings.allowed_group_id, settings.admin_group_id):
-            member = await bot.get_chat_member(group_id, bot.id)
-            if member.status != "administrator":
-                raise SystemExit("Make the bot an administrator in both groups first")
-            if group_id == settings.allowed_group_id and not member.can_restrict_members:
-                raise SystemExit("Give the bot Ban users permission in the main group")
         await bot.set_webhook(settings.webhook_url, secret_token=settings.webhook_secret,
                               allowed_updates=["message", "callback_query", "chat_member", "my_chat_member"],
                               max_connections=4, drop_pending_updates=False)
@@ -42,7 +36,7 @@ def main() -> None:
         try:
             asyncio.run(register_webhook())
         except Exception as error:
-            raise SystemExit(f"Telegram setup failed ({type(error).__name__}); check settings and bot permissions") from None
+            raise SystemExit(f"Telegram setup failed ({type(error).__name__}); check token, webhook URL and connection") from None
         return
     path = Path(load_settings().db_path).resolve()
     with sqlite3.connect(f"{path.as_uri()}?mode=rw", uri=True) as source:

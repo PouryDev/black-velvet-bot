@@ -141,3 +141,100 @@ async def test_administrator_never_banned(env):
     await delivery.outbox_once()
     bot.ban_chat_member.assert_not_awaited()
     assert (await c.store.one("SELECT status FROM members"))["status"] == "administrator"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [
+    pytest.param("rights", id="ban-rights-missing"),
+    pytest.param("admin", id="bot-not-admin"),
+    pytest.param("forbidden", id="bot-access-forbidden"),
+    pytest.param("member-check", id="membership-check-forbidden"),
+])
+async def test_ban_permission_failure_notifies_admins_without_marking_member_banned(env, failure):
+    import json
+    from telegram.error import BadRequest, Forbidden
+
+    c, delivery, bot, clock = env
+    await c.observe(message(c.settings, BASE), BASE)
+    clock[0] += 3 * WEEK
+    await c.maintain(clock[0])
+    await c.db.raw.commit()
+    if failure == "member-check":
+        bot.get_chat_member.side_effect = Forbidden("bot was kicked from the supergroup chat")
+    else:
+        errors = {
+            "rights": BadRequest("Not enough rights to restrict/unrestrict chat member"),
+            "admin": BadRequest("CHAT_ADMIN_REQUIRED"),
+            "forbidden": Forbidden("bot is not a member of the supergroup chat"),
+        }
+        bot.ban_chat_member.side_effect = errors[failure]
+
+    await delivery.outbox_once()
+
+    assert (await c.store.one("SELECT status FROM members WHERE user_id=1"))["status"] == "member"
+    assert (await c.store.one("SELECT status FROM outbox WHERE method='inactivity_ban'"))["status"] == "failed"
+    alerts = await c.store.all("SELECT * FROM outbox WHERE dedupe_key LIKE 'ban-permission:%'")
+    assert len(alerts) == 1
+    payload = json.loads(alerts[0]["payload"])
+    assert payload["chat_id"] == c.settings.admin_group_id
+    assert "ادمین" in payload["text"] and "Ban users" in payload["text"]
+    assert str(c.settings.allowed_group_id) in payload["text"]
+    await delivery.outbox_once()
+    assert bot.send_message.await_args.kwargs["chat_id"] == c.settings.admin_group_id
+
+
+@pytest.mark.asyncio
+async def test_ban_access_reminder_is_deduplicated_and_failed_ban_can_be_retried(env):
+    from telegram.error import BadRequest
+
+    c, delivery, bot, clock = env
+    await c.observe(message(c.settings, BASE), BASE)
+    clock[0] += 3 * WEEK
+    await c.maintain(clock[0])
+    await c.db.raw.commit()
+    bot.ban_chat_member.side_effect = BadRequest("Not enough rights to restrict/unrestrict chat member")
+    await delivery.outbox_once()
+    await delivery.outbox_once()  # deliver the reminder
+    await c.store.execute("UPDATE outbox SET status='pending',next_attempt=0 WHERE method='inactivity_ban'")
+    await c.db.raw.commit()
+    await delivery.outbox_once()
+    assert len(await c.store.all("SELECT id FROM outbox WHERE dedupe_key LIKE 'ban-permission:%'")) == 1
+    assert bot.send_message.await_count == 1
+
+    bot.ban_chat_member.side_effect = None
+    await c.store.execute("UPDATE outbox SET status='pending',next_attempt=0 WHERE method='inactivity_ban'")
+    await c.db.raw.commit()
+    await delivery.outbox_once()
+    assert (await c.store.one("SELECT status FROM members WHERE user_id=1"))["status"] == "kicked"
+
+
+@pytest.mark.asyncio
+async def test_non_permission_ban_error_does_not_ask_admins_for_rights(env):
+    from telegram.error import BadRequest
+
+    c, delivery, bot, clock = env
+    await c.observe(message(c.settings, BASE), BASE)
+    clock[0] += 3 * WEEK
+    await c.maintain(clock[0])
+    await c.db.raw.commit()
+    bot.ban_chat_member.side_effect = BadRequest("User not found")
+    await delivery.outbox_once()
+    assert not await c.store.all("SELECT id FROM outbox WHERE dedupe_key LIKE 'ban-permission:%'")
+
+
+@pytest.mark.asyncio
+async def test_failed_admin_reminder_does_not_generate_more_reminders(env):
+    from telegram.error import Forbidden
+
+    c, delivery, bot, clock = env
+    await c.observe(message(c.settings, BASE), BASE)
+    clock[0] += 3 * WEEK
+    await c.maintain(clock[0])
+    await c.db.raw.commit()
+    bot.ban_chat_member.side_effect = Forbidden("not allowed")
+    bot.send_message.side_effect = Forbidden("not allowed in admin group either")
+    await delivery.outbox_once()
+    await delivery.outbox_once()
+    assert len(await c.store.all("SELECT id FROM outbox WHERE dedupe_key LIKE 'ban-permission:%'")) == 1
+    assert (await c.store.one("SELECT status FROM outbox WHERE dedupe_key LIKE 'ban-permission:%'"))["status"] == "failed"
+    assert not await delivery.outbox_once()
