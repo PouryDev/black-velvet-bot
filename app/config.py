@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-ALLOWED_GROUP_ID = -1004489388121
+ALLOWED_GROUP_ID = -1004357571815
 ADMIN_GROUP_ID = -5534254496
 WEBHOOK_URL = "https://black-velvet.pourydev.ir/webhook"
 TELEGRAM_API_BASE = "https://api.telegram.org"
