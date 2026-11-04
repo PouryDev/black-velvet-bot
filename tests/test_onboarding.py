@@ -146,3 +146,90 @@ async def test_existing_member_completes_profile_without_admission(env):
     assert await c.store.profile(1)
     assert await c.db.get_user(1)
     assert await c.store.one("SELECT 1 FROM applications") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("username", [None, "member_one"])
+@pytest.mark.parametrize("status", ["left", "kicked", "restricted"])
+async def test_start_welcomes_nonmember_and_shows_join_button(env, username, status):
+    c, bot = env
+    bot.get_chat_member.return_value = SimpleNamespace(status=status, is_member=False)
+
+    await c.start(SimpleNamespace(effective_user=user(username=username)), bot)
+
+    response = (await payloads(c))[0]
+    assert "خوش آمدی" in response["text"] and "Black Velvet" in response["text"]
+    button = response["reply_markup"]["inline_keyboard"][0][0]
+    assert button["text"] == "درخواست عضویت"
+    assert button["callback_data"] == "join:begin"
+    assert await c.store.one("SELECT 1 FROM forms") is None
+    assert await c.store.one("SELECT 1 FROM applications") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("username", [None, "member_one"])
+@pytest.mark.parametrize("status", ["member", "administrator", "creator", "restricted"])
+async def test_start_welcomes_member_and_explains_private_turns(env, username, status):
+    c, bot = env
+    bot.get_chat_member.return_value = SimpleNamespace(status=status, is_member=True)
+
+    await c.start(SimpleNamespace(effective_user=user(username=username)), bot)
+
+    response = (await payloads(c))[0]
+    assert "خوش آمدی" in response["text"] and "Black Velvet" in response["text"]
+    assert "راهنمای رول ناشناس" in response["text"]
+    assert all(command in response["text"] for command in ("/register", "/fuck", "/cancel", "/end"))
+    assert "نوبت توست" in response["text"] and "پیوی" in response["text"] and "ریپلای" in response["text"]
+    assert "reply_markup" not in response
+    assert (await c.store.one("SELECT user_id FROM members"))["user_id"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["pending", "accepted"])
+async def test_start_still_welcomes_applicant_and_does_not_duplicate_request(env, status):
+    c, bot = env
+    await c.store.execute("INSERT INTO applications(user_id,data,status,created_at) VALUES(?,?,?,0)",
+                          (1, json.dumps(profile()), status))
+
+    await c.start(SimpleNamespace(effective_user=user()), bot)
+    c.event = "click-existing-request"
+    await c.private_callback(SimpleNamespace(data="join:begin", from_user=user()), bot)
+
+    response = (await payloads(c))[0]
+    assert "خوش آمدی" in response["text"]
+    assert response["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "join:begin"
+    assert "انتظار" in response["text"] or "منتظر" in response["text"]
+    assert len(await c.store.all("SELECT id FROM applications")) == 1
+    assert await c.store.one("SELECT 1 FROM forms") is None
+
+
+@pytest.mark.asyncio
+async def test_join_button_checks_username_before_starting_form(env):
+    c, bot = env
+    visitor = user(username=None)
+    await c.start(SimpleNamespace(effective_user=visitor), bot)
+    c.event = "click-without-username"
+    await c.private_callback(SimpleNamespace(data="join:begin", from_user=visitor), bot)
+    assert (await payloads(c))[-1]["text"] == onboarding.NEED_USERNAME
+    assert await c.store.one("SELECT 1 FROM forms") is None
+
+    c.event = "click-after-setting-username"
+    await c.private_callback(SimpleNamespace(data="join:begin", from_user=user()), bot)
+    assert (await c.store.one("SELECT step FROM forms WHERE user_id=1"))["step"] == 0
+
+
+@pytest.mark.asyncio
+async def test_start_welcomes_even_when_telegram_cannot_check_membership(env):
+    from telegram.error import Forbidden
+
+    c, bot = env
+    bot.get_chat_member.side_effect = Forbidden("membership access unavailable")
+
+    await c.start(SimpleNamespace(effective_user=user(username=None)), bot)
+
+    response = (await payloads(c))[0]
+    assert "خوش آمدی" in response["text"]
+    assert "امکان بررسی عضویت" in response["text"]
+    assert "reply_markup" not in response
+    assert await c.store.one("SELECT 1 FROM members") is None
+    assert await c.store.one("SELECT 1 FROM forms") is None

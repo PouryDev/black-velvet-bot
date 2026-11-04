@@ -101,3 +101,32 @@ async def test_existing_public_register_stays_in_main_group(runtime):
     outbox = await c.store.all("SELECT payload FROM outbox")
     assert len(outbox) == 1
     assert json.loads(outbox[0]["payload"])["chat_id"] == c.settings.allowed_group_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("is_member", [False, True])
+async def test_start_routes_to_join_funnel_or_anonymous_guide(runtime, is_member):
+    c, worker = runtime
+    worker.bot.get_chat_member.return_value = SimpleNamespace(status="member" if is_member else "left")
+    await queue(c, 1, "/start")
+    await worker.inbox_once()
+    response = json.loads((await c.store.one("SELECT payload FROM outbox"))["payload"])
+    assert "خوش آمدی" in response["text"]
+    assert not c.failed
+    if is_member:
+        assert "راهنمای رول ناشناس" in response["text"]
+        assert "reply_markup" not in response
+        return
+    assert response["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "join:begin"
+    callback = {"update_id": 2, "callback_query": {
+        "id": "join-callback", "chat_instance": "test-instance", "data": "join:begin",
+        "from": {"id": 101, "first_name": "Member", "username": "member_101", "is_bot": False},
+        "message": {"message_id": 50, "date": 1700000000, "chat": {"id": 101, "type": "private"},
+                    "from": {"id": 999, "first_name": "Bot", "username": "TestBot", "is_bot": True}},
+    }}
+    await c.store.execute("INSERT INTO inbox(update_id,lane,payload,created_at) VALUES(2,'101',?,0)", (dumps(callback),))
+    await c.db.raw.commit()
+    with patch.object(ExtBot, "answer_callback_query", new_callable=AsyncMock):
+        await worker.inbox_once()
+    assert not c.failed
+    assert (await c.store.one("SELECT step FROM forms WHERE user_id=101"))["step"] == 0

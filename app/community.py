@@ -101,13 +101,15 @@ class Community:
 
     async def start(self, update: Update, bot) -> None:
         user = update.effective_user
-        if not user.username:
-            await self.say(user.id, onboarding.NEED_USERNAME)
+        welcome = onboarding.START_WELCOME
+        try:
+            is_member = await self.member(bot, user.id)
+        except TelegramError:
+            await self.say(user.id, welcome + "\n\nفعلاً امکان بررسی عضویتت وجود ندارد؛ کمی بعد دوباره /start را بزن.")
             return
-        is_member = await self.member(bot, user.id)
         if is_member:
             await self.sync_member(user, "member", time.time())
-            await self.say(user.id, "به ربات خوش آمدی.\n/register تکمیل پروفایل\n/fuck جست‌وجوی ناشناس\n/cancel لغو صف\n/end پایان نشست")
+            await self.say(user.id, welcome + "\n\n" + onboarding.START_MEMBER_GUIDE)
             return
         request = await self.store.one(
             "SELECT status FROM applications WHERE user_id=? AND status IN ('pending','accepted') ORDER BY id DESC LIMIT 1",
@@ -115,9 +117,9 @@ class Community:
         )
         if request:
             text = "درخواستت در انتظار بررسی ادمین‌هاست." if request["status"] == "pending" else "درخواستت قبول شده؛ منتظر اضافه‌شدن توسط ادمین‌ها بمان."
-            await self.say(user.id, text)
-            return
-        await self.say(user.id, "برای ورود به گروه، درخواست عضویت را تکمیل کن.", reply_markup=InlineKeyboardMarkup([
+        else:
+            text = onboarding.START_JOIN
+        await self.say(user.id, welcome + "\n\n" + text, reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("درخواست عضویت", callback_data="join:begin")],
         ]).to_dict())
 

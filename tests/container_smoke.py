@@ -23,6 +23,8 @@ class TelegramStub(BaseHTTPRequestHandler):
         method = self.path.rsplit("/", 1)[-1]
         if method == "getMe":
             result = {"id": 999, "first_name": "Test bot", "is_bot": True, "username": "TestBot"}
+        elif method == "getChatMember":
+            result = {"status": "left", "user": {"id": 101, "is_bot": False, "first_name": "Member"}}
         elif method == "sendMessage":
             received.append(body)
             result = {"message_id": 1, "date": int(time.time()), "chat": {"id": 101, "type": "private"}, "text": "ok"}
