@@ -70,6 +70,14 @@ CREATE TABLE IF NOT EXISTS role_sessions (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS active_sessions ON role_sessions(status, user_a, user_b);
+CREATE TABLE IF NOT EXISTS daily_reports (
+    chat_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    report_day TEXT NOT NULL,
+    report_message_id INTEGER NOT NULL,
+    target_message_id INTEGER NOT NULL,
+    PRIMARY KEY(chat_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS outbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     dedupe_key TEXT NOT NULL UNIQUE,
@@ -132,6 +140,18 @@ class CommunityStore:
     async def profile(self, user_id: int) -> dict | None:
         row = await self.one("SELECT data FROM member_profiles WHERE user_id=?", (user_id,))
         return json.loads(row["data"]) if row else None
+
+    async def claim_report(self, chat_id: int, user_id: int, report_day: str,
+                           report_message_id: int, target_message_id: int) -> bool:
+        cursor = await self.execute(
+            """INSERT INTO daily_reports(chat_id,user_id,report_day,report_message_id,target_message_id)
+               VALUES(?,?,?,?,?) ON CONFLICT(chat_id,user_id) DO UPDATE SET
+               report_day=excluded.report_day,report_message_id=excluded.report_message_id,
+               target_message_id=excluded.target_message_id
+               WHERE daily_reports.report_day < excluded.report_day""",
+            (chat_id, user_id, report_day, report_message_id, target_message_id),
+        )
+        return cursor.rowcount == 1
 
     async def session(self, user_id: int):
         return await self.one(

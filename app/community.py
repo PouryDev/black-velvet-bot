@@ -10,7 +10,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 from telegram.error import TelegramError
 
-from app import onboarding
+from app import onboarding, texts
 from app.commands import parse_command
 from app.community_store import DAY, WEEK, CommunityStore, dumps
 from app.config import Settings
@@ -427,6 +427,8 @@ class Community:
             return
         if name == "start":
             await self.start(update, bot)
+        elif name == "report":
+            await self.say(user.id, texts.REPORT_USAGE)
         elif name == "discard":
             await self.store.execute("DELETE FROM forms WHERE user_id=?", (user.id,))
             await self.say(user.id, "فرم لغو شد. /start")

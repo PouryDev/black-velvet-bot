@@ -8,7 +8,7 @@ from telegram.ext import Application, TypeHandler
 from app.community import Community, route
 from app.config import Settings
 from app.db import Database
-from app.handlers import fuck, ping, register
+from app.handlers import fuck, ping, register, report
 
 
 async def on_error(update: object, context) -> None:
@@ -32,5 +32,6 @@ def build_application(settings: Settings, db: Database) -> Application:
     ping.add_handlers(application)
     register.add_handlers(application)
     fuck.add_handlers(application)
+    report.add_handlers(application)
     application.add_error_handler(on_error)
     return application

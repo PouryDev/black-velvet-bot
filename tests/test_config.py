@@ -6,8 +6,8 @@ def test_settings_and_hardcoded_admin_group(monkeypatch) -> None:
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret-123456")
     monkeypatch.setenv("ADMIN_GROUP_ID", "-999")
     settings = load_settings()
-    assert settings.allowed_group_id == ALLOWED_GROUP_ID == -1004357571815
-    assert settings.admin_group_id == ADMIN_GROUP_ID == -5534254496
+    assert settings.allowed_group_id == ALLOWED_GROUP_ID == -1004489388121
+    assert settings.admin_group_id == ADMIN_GROUP_ID == -1004357571815
     assert settings.port == PORT == 8033
     assert settings.webhook_url == WEBHOOK_URL == "https://black-velvet.pourydev.ir/webhook"
     assert settings.telegram_api_base == TELEGRAM_API_BASE

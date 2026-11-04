@@ -9,6 +9,7 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs
 
 from fastapi.testclient import TestClient
 
@@ -26,8 +27,11 @@ class TelegramStub(BaseHTTPRequestHandler):
         elif method == "getChatMember":
             result = {"status": "left", "user": {"id": 101, "is_bot": False, "first_name": "Member"}}
         elif method == "sendMessage":
-            received.append(body)
-            result = {"message_id": 1, "date": int(time.time()), "chat": {"id": 101, "type": "private"}, "text": "ok"}
+            parameters = {key: values[0] for key, values in parse_qs(body.decode()).items()}
+            received.append(parameters)
+            chat_id = int(parameters["chat_id"])
+            result = {"message_id": len(received), "date": int(time.time()),
+                      "chat": {"id": chat_id, "type": "private" if chat_id > 0 else "supergroup"}, "text": "ok"}
         else:
             result = True
         encoded = json.dumps({"ok": True, "result": result}).encode()
@@ -59,5 +63,30 @@ with TestClient(create_app()) as client:
             break
         time.sleep(0.1)
     assert len(received) == 1
+    settings = client.app.state.community.settings
+    report_date = int(time.time())
+    for command_id in (2, 3):
+        result = client.post("/webhook", headers={"X-Telegram-Bot-Api-Secret-Token": os.environ["WEBHOOK_SECRET"]}, json={
+            "update_id": command_id, "message": {
+                "message_id": command_id, "date": report_date,
+                "from": {"id": 101, "is_bot": False, "first_name": "Reporter"},
+                "chat": {"id": settings.allowed_group_id, "type": "supergroup"}, "text": "/report",
+                "reply_to_message": {"message_id": 42, "date": int(time.time()),
+                                     "chat": {"id": settings.allowed_group_id, "type": "supergroup"},
+                                     "from": {"id": 202, "is_bot": False, "first_name": "Target"}, "text": "Reported message"},
+            },
+        })
+        assert result.status_code == 200
+        for _ in range(60):
+            if len(received) >= command_id + 1:
+                break
+            time.sleep(0.1)
+    assert len(received) == 4
+    reports = [item for item in received if int(item["chat_id"]) == settings.admin_group_id]
+    assert len(reports) == 1
+    assert "گزارش جدید" in reports[0]["text"]
+    assert json.loads(reports[0]["reply_markup"])["inline_keyboard"][0][0]["url"].endswith("/42")
+    assert json.loads(received[2]["reply_parameters"])["message_id"] == 2
+    assert "سهمیه" in received[3]["text"]
 server.shutdown()
-print("Container smoke passed: startup, health, webhook auth, durable inbox, routing, outbox, graceful shutdown")
+print("Smoke passed: startup, health, webhook auth, inbox/outbox, reports, daily limit, graceful shutdown")
