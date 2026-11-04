@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 
-POSITION_ORDER = ("top", "bottom", "vers", "vers_top", "vers_bottom")
+POSITION_ORDER = ("top", "bottom", "vers", "switch", "vanilla", "vers_top", "vers_bottom")
 POSITION_CODES = {
     "top": "t",
     "bottom": "b",
     "vers": "v",
     "vers_top": "vt",
     "vers_bottom": "vb",
+    "switch": "s",
+    "vanilla": "n",
 }
 CODE_TO_POSITION = {code: name for name, code in POSITION_CODES.items()}
 GENDER_CODES = {"male": "m", "female": "f", "trans": "x"}

@@ -12,6 +12,8 @@ POSITION_LABELS = {
     "vers": "ورس",
     "vers_top": "ورس‌تاپ",
     "vers_bottom": "ورس‌باتم",
+    "switch": "سوئیچ",
+    "vanilla": "وانیلا",
 }
 
 MUST_REGISTER = "اول باید با /register خودتو ثبت کنی. بدون پروفایل کسی بهت نمی‌رسه."

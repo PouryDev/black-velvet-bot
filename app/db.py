@@ -76,6 +76,11 @@ class Database:
         self._path = path
         self._db: aiosqlite.Connection | None = None
         self._lock = asyncio.Lock()
+        self.managed_transaction = False
+
+    async def commit(self) -> None:
+        if not self.managed_transaction:
+            await self.raw.commit()
 
     @property
     def raw(self) -> aiosqlite.Connection:
@@ -198,14 +203,14 @@ class Database:
             """,
             (user_id, username, first_name, gender, primary, payload, _utc_now()),
         )
-        await self.raw.commit()
+        await self.commit()
 
     async def touch_identity(self, user_id: int, username: str | None, first_name: str | None) -> None:
         await self.raw.execute(
             "UPDATE users SET username = ?, first_name = ? WHERE user_id = ?",
             (username, first_name, user_id),
         )
-        await self.raw.commit()
+        await self.commit()
 
     async def find_match(
         self,
@@ -265,14 +270,14 @@ class Database:
             """,
             (user_id, wanted_gender, payload, _utc_now()),
         )
-        await self.raw.commit()
+        await self.commit()
 
     async def dequeue_users(self, *user_ids: int) -> None:
         if not user_ids:
             return
         placeholders = ",".join("?" * len(user_ids))
         await self.raw.execute(f"DELETE FROM queue WHERE user_id IN ({placeholders})", user_ids)
-        await self.raw.commit()
+        await self.commit()
 
     async def is_in_queue(self, user_id: int) -> bool:
         cur = await self.raw.execute("SELECT 1 FROM queue WHERE user_id = ? LIMIT 1", (user_id,))

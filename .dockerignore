@@ -8,5 +8,7 @@ venv
 tests
 *.md
 .env
+.env.*
+migration-data
 data
 *.db
