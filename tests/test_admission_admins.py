@@ -188,7 +188,12 @@ async def test_only_accepted_applicant_is_autoapproved_and_mentions_once_after_j
     env.bot.approve_chat_join_request.assert_awaited_once_with(env.c.settings.allowed_group_id, 101)
     notices = [call.kwargs for call in env.bot.send_message.await_args_list if call.kwargs.get("chat_id") == env.c.settings.allowed_group_id]
     assert len(notices) == 1 and "tg://user?id=101" in notices[0]["text"]
-    assert "Member &lt;&amp;&gt;" in notices[0]["text"] and "فوروارد" in notices[0]["text"]
+    assert notices[0]["text"] == (
+        '<a href="tg://user?id=101">Member &lt;&amp;&gt;</a> به گروه —𝖫𝗎𝗌𝗍 𝖢𝗅𝗎𝖻 . خوش اومدی🖤\n'
+        "جهت تکمیل فرم، لطفا فرم آخر رو پر کن طبق نمونه\n"
+        "و برامون بفرست تا ادمینا تو کمترین مدت ثبتت کنن\n"
+        "امیدوارم که بهت اینجا خوش بگذره.💋"
+    )
     assert notices[0]["parse_mode"] == "HTML"
     await process(env, 5, message={"message_id": 5, "date": NOW, "from": who(900),
                                   "chat": {"id": env.c.settings.allowed_group_id, "type": "supergroup"}, "new_chat_members": [who()]})
@@ -211,7 +216,7 @@ async def test_manual_join_member_event_and_service_message_only_announce_once(e
                                   "chat": {"id": env.c.settings.allowed_group_id, "type": "supergroup"}, "new_chat_members": [who()]})
     await flush(env)
     assert env.bot.send_message.await_count == 1
-    assert "فوروارد" in env.bot.send_message.await_args.kwargs["text"]
+    assert "جهت تکمیل فرم، لطفا فرم آخر رو پر کن طبق نمونه" in env.bot.send_message.await_args.kwargs["text"]
     env.bot.approve_chat_join_request.assert_not_awaited()
 
 

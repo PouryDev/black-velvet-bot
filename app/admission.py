@@ -67,8 +67,10 @@ class Admission:
         await c.store.execute("DELETE FROM admission_join_requests WHERE user_id=?", (user.id,))
         if cursor.rowcount:
             await c.store.emit(f"admission-group-welcome:{request['id']}", "send_message", chat_id=c.settings.allowed_group_id,
-                               text=f"{mention_user(user)}، به Black Velvet خوش آمدی 🖤\n"
-                                    "فرمی که در پیوی ربات برایت فرستادیم را همین‌جا در گروه فوروارد کن.", parse_mode="HTML")
+                               text=f"{mention_user(user)} به گروه —𝖫𝗎𝗌𝗍 𝖢𝗅𝗎𝖻 . خوش اومدی🖤\n"
+                                    "جهت تکمیل فرم، لطفا فرم آخر رو پر کن طبق نمونه\n"
+                                    "و برامون بفرست تا ادمینا تو کمترین مدت ثبتت کنن\n"
+                                    "امیدوارم که بهت اینجا خوش بگذره.💋", parse_mode="HTML")
 
     async def deliver_invite(self, bot, application_id: int, notice_key: str) -> None:
         c = self.community

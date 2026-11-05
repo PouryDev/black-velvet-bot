@@ -144,7 +144,7 @@ with TestClient(create_app()) as client:
         "chat": {"id": settings.allowed_group_id, "type": "supergroup"}, "user_chat_id": 101,
         "from": {"id": 101, "first_name": "Member", "is_bot": False}, "date": int(time.time()),
     }})
-    wait_for(lambda: any("tg://user?id=101" in item.get("text", "") and "فوروارد" in item.get("text", "") for item in received))
+    wait_for(lambda: any("tg://user?id=101" in item.get("text", "") and "خوش اومدی🖤" in item.get("text", "") for item in received))
     assert approved == [101]
 server.shutdown()
 print("Smoke passed: startup, health, webhook auth, reports, daily limit, bot admin grant, acceptance, profile, invite, autoapproval, welcome, shutdown")
