@@ -114,6 +114,10 @@ class Delivery:
 
     async def perform(self, method: str, payload: dict):
         c = self.community
+        if method == "admission_invite":
+            return await c.admission.deliver_invite(self.bot, **payload)
+        if method == "admission_join":
+            return await c.admission.approve(self.bot, **payload)
         if method in {"inactivity_warning", "inactivity_ban"}:
             user_id = payload["user_id"]
             row = await self.store.one("SELECT * FROM members WHERE user_id=?", (user_id,))
@@ -201,6 +205,14 @@ class Delivery:
                             f"لطفاً ربات را در گروه اصلی ({settings.allowed_group_id}) ادمین کنید "
                             "و مجوز Ban users (بن کردن اعضا) را بدهید."
                         ),
+                    )
+                if row["method"] in {"admission_invite", "admission_join"} and _permission_error(error):
+                    settings = self.community.settings
+                    await self.store.emit(
+                        f"admission-permission:{settings.allowed_group_id}:{int(time.time() // DAY)}",
+                        "send_message", chat_id=settings.admin_group_id,
+                        text="ارسال لینک یا تأیید ورود انجام نشد. ربات را در گروه اصلی ادمین کنید و مجوز Invite users بدهید؛ "
+                             "بعد از اصلاح دسترسی، عملیات ناموفق را دوباره اجرا کنید.",
                     )
                 if permanent and row["method"] in {"role_turn", "session_notice"}:
                     session = await self.store.one("SELECT * FROM role_sessions WHERE id=? AND status='active'", (payload["session_id"],))

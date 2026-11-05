@@ -20,6 +20,6 @@ async def test_webhook_registers_without_checking_group_admin_permissions(monkey
     bot.get_chat_member.assert_not_awaited()
     bot.set_webhook.assert_awaited_once_with(
         settings.webhook_url, secret_token=settings.webhook_secret,
-        allowed_updates=["message", "callback_query", "chat_member", "my_chat_member"],
+        allowed_updates=["message", "callback_query", "chat_member", "my_chat_member", "chat_join_request"],
         max_connections=4, drop_pending_updates=False,
     )

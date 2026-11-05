@@ -11,6 +11,8 @@ from telegram.ext import ApplicationHandlerStop, ContextTypes
 from telegram.error import TelegramError
 
 from app import onboarding, texts
+from app.admission import Admission, active
+from app.admins import BotAdmins
 from app.commands import parse_command
 from app.community_store import DAY, WEEK, CommunityStore, dumps
 from app.config import Settings
@@ -31,6 +33,8 @@ class Community:
         self.settings = settings
         self.db = db
         self.store = CommunityStore(db)
+        self.admission = Admission(self)
+        self.admins = BotAdmins(self)
         self.lock = asyncio.Lock()
         self.activity: dict[int, Activity] = {}
         self.event = ""
@@ -112,11 +116,15 @@ class Community:
             await self.say(user.id, welcome + "\n\n" + onboarding.START_MEMBER_GUIDE)
             return
         request = await self.store.one(
-            "SELECT status FROM applications WHERE user_id=? AND status IN ('pending','accepted') ORDER BY id DESC LIMIT 1",
+            "SELECT id,status FROM applications WHERE user_id=? AND status IN ('pending','accepted') ORDER BY id DESC LIMIT 1",
             (user.id,),
         )
+        if request and request["status"] == "accepted":
+            await self.say(user.id, welcome + "\n\nدرخواستت قبول شده؛ لینک ورود و فرم را برایت می‌فرستیم.")
+            await self.admission.invite(request["id"], f"{self.event}:admission-invite")
+            return
         if request:
-            text = "درخواستت در انتظار بررسی ادمین‌هاست." if request["status"] == "pending" else "درخواستت قبول شده؛ منتظر اضافه‌شدن توسط ادمین‌ها بمان."
+            text = "درخواستت در انتظار بررسی ادمین‌هاست."
         else:
             text = onboarding.START_JOIN
         await self.say(user.id, welcome + "\n\n" + text, reply_markup=InlineKeyboardMarkup([
@@ -140,7 +148,7 @@ class Community:
                 "SELECT status FROM applications WHERE user_id=? AND status IN ('pending','accepted') LIMIT 1", (user.id,),
             )
             if prior:
-                await self.say(user.id, "درخواستت قبلاً ثبت شده؛ منتظر بررسی یا اضافه‌شدن به گروه بمان.")
+                await self.say(user.id, "درخواستت قبلاً ثبت شده؛ برای دیدن وضعیت و دریافت لینک پس از تأیید /start را بزن.")
                 return
             if not self.settings.admin_group_id:
                 await self.say(user.id, "ثبت‌نام هنوز توسط مدیر راه‌اندازی نشده است.")
@@ -250,9 +258,8 @@ class Community:
     async def decide(self, query, bot) -> None:
         if query.message is None or query.message.chat.id != self.settings.admin_group_id:
             return
-        admin = await bot.get_chat_member(self.settings.admin_group_id, query.from_user.id)
-        if admin.status not in {"creator", "administrator"}:
-            await self.answer(query, "فقط ادمین‌های گروه اجازه بررسی دارند.", show_alert=True)
+        if query.from_user.is_bot or not await self.admins.allowed(query.from_user.id, bot):
+            await self.answer(query, "فقط ادمین‌های مجاز ربات اجازه بررسی دارند.", show_alert=True)
             return
         try:
             _, request_id, action = query.data.split(":")
@@ -273,9 +280,13 @@ class Community:
                 return
             data["username"] = applicant.username
             await self.save_profile(request["user_id"], data)
-            await self.store.emit(f"welcome:{request_id}", "send_message", chat_id=request["user_id"], text=onboarding.WELCOME)
         await self.store.execute("UPDATE applications SET status=?,decided_by=?,decided_at=?,data=? WHERE id=? AND status='pending'",
                                  ("accepted" if action == "accept" else "rejected", query.from_user.id, time.time(), dumps(data), request_id))
+        if action == "accept":
+            await self.admission.invite(request_id, f"welcome:{request_id}")
+            await self.admission.queue_join(request)
+        else:
+            await self.store.execute("DELETE FROM admission_join_requests WHERE user_id=?", (request["user_id"],))
         await self.store.emit(f"decision:{request_id}", "edit_message_caption", chat_id=query.message.chat.id,
                               message_id=query.message.message_id,
                               caption=onboarding.card(data) + ("\n\n✅ قبول شد" if action == "accept" else "\n\n❌ رد شد"),
@@ -499,6 +510,9 @@ class Community:
         self.event = f"update:{update.update_id}"
         bot = context.bot
         chat, user = update.effective_chat, update.effective_user
+        if update.chat_join_request:
+            await self.admission.join_request(update.chat_join_request)
+            raise ApplicationHandlerStop
         if update.chat_member and update.chat_member.chat.id == self.settings.allowed_group_id:
             changed = update.chat_member.new_chat_member
             status = changed.status
@@ -506,8 +520,13 @@ class Community:
                 status = "left"
             if not changed.user.is_bot:
                 await self.sync_member(changed.user, status, time.time())
+                if active(changed) and not active(update.chat_member.old_chat_member):
+                    await self.admission.joined(changed.user)
             raise ApplicationHandlerStop
         if chat is None or user is None:
+            raise ApplicationHandlerStop
+        if chat.id == self.settings.admin_group_id and update.message:
+            await self.admins.command(update.message, bot)
             raise ApplicationHandlerStop
         if update.callback_query:
             query = update.callback_query
@@ -534,6 +553,7 @@ class Community:
         for joined in message.new_chat_members or ():
             if not joined.is_bot:
                 await self.sync_member(joined, "member", time.time())
+                await self.admission.joined(joined)
         if message.left_chat_member and not message.left_chat_member.is_bot:
             await self.sync_member(message.left_chat_member, "left", time.time())
         await self.observe(message, time.time())

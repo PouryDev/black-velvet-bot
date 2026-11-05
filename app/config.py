@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 ALLOWED_GROUP_ID = -1004489388121
 ADMIN_GROUP_ID = -1004357571815
+OWNER_USER_ID = 8971257024
 WEBHOOK_URL = "https://black-velvet.pourydev.ir/webhook"
 TELEGRAM_API_BASE = "https://api.telegram.org"
 PORT = 8033
@@ -20,6 +21,7 @@ class Settings:
     port: int = PORT
     db_path: str = DB_PATH
     admin_group_id: int = ADMIN_GROUP_ID
+    owner_user_id: int = OWNER_USER_ID
     webhook_secret: str = ""
     session_timeout_hours: int = 48
     queue_timeout_hours: int = 24

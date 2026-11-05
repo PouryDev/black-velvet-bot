@@ -27,7 +27,7 @@ def user(user_id=1, username="member_one"):
 async def env(tmp_path):
     db = Database(str(tmp_path / "bot.db"))
     await db.init()
-    c = Community(Settings(bot_token="123:test-token", db_path=str(tmp_path / "bot.db")), db)
+    c = Community(Settings(bot_token="123:test-token", db_path=str(tmp_path / "bot.db"), owner_user_id=900), db)
     await c.store.init()
     bot = SimpleNamespace(username="TestBot", get_chat_member=AsyncMock(return_value=SimpleNamespace(status="left")),
                           get_chat=AsyncMock(return_value=SimpleNamespace(username="member_one")))
@@ -90,7 +90,7 @@ async def test_no_username_cannot_enter_or_submit_funnel(env):
 
 
 @pytest.mark.asyncio
-async def test_admission_card_and_exactly_one_accept_welcome(env):
+async def test_admission_card_and_exactly_one_accept_invite(env):
     c, bot = env
     form = await fill_form(c, bot)
     await c.submit_form(user(), form, bot)
@@ -106,17 +106,18 @@ async def test_admission_card_and_exactly_one_accept_welcome(env):
     await c.decide(q, bot)
     assert (await c.store.one("SELECT status FROM applications"))["status"] == "accepted"
     assert await c.store.profile(1)
-    welcomes = [p for p in await payloads(c) if p.get("text") == onboarding.WELCOME]
-    assert len(welcomes) == 1
-    assert "تا دقایقی دیگر" in welcomes[0]["text"]
-    assert not hasattr(bot, "approve_chat_join_request")
+    invites = await c.store.all("SELECT * FROM outbox WHERE method='admission_invite'")
+    assert len(invites) == 1
+    assert json.loads(invites[0]["payload"])["application_id"] == 1
 
 
 @pytest.mark.asyncio
 async def test_reject_is_silent_and_nonadmins_cannot_decide(env):
     c, bot = env
     await c.store.execute("INSERT INTO applications(user_id,data,created_at) VALUES(?,?,0)", (1, json.dumps(profile())))
-    await c.decide(query(c, "reject"), bot)
+    unauthorized = query(c, "reject")
+    unauthorized.from_user = user(901)
+    await c.decide(unauthorized, bot)
     assert (await c.store.one("SELECT status FROM applications"))["status"] == "pending"
     bot.get_chat_member.return_value = SimpleNamespace(status="administrator")
     await c.decide(query(c, "reject", chat_id=-999), bot)
@@ -197,8 +198,12 @@ async def test_start_still_welcomes_applicant_and_does_not_duplicate_request(env
 
     response = (await payloads(c))[0]
     assert "خوش آمدی" in response["text"]
-    assert response["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "join:begin"
-    assert "انتظار" in response["text"] or "منتظر" in response["text"]
+    if status == "pending":
+        assert response["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "join:begin"
+        assert "انتظار" in response["text"]
+    else:
+        assert "قبول شده" in response["text"]
+        assert await c.store.one("SELECT 1 FROM outbox WHERE method='admission_invite'")
     assert len(await c.store.all("SELECT id FROM applications")) == 1
     assert await c.store.one("SELECT 1 FROM forms") is None
 

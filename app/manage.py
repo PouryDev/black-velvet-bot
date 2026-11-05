@@ -18,7 +18,7 @@ async def register_webhook() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     async with Bot(settings.bot_token, base_url=settings.bot_api_url, base_file_url=settings.bot_file_api_url) as bot:
         await bot.set_webhook(settings.webhook_url, secret_token=settings.webhook_secret,
-                              allowed_updates=["message", "callback_query", "chat_member", "my_chat_member"],
+                              allowed_updates=["message", "callback_query", "chat_member", "my_chat_member", "chat_join_request"],
                               max_connections=4, drop_pending_updates=False)
     print("Webhook registered with secret header and membership updates. No pending updates dropped.")
 

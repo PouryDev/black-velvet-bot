@@ -46,6 +46,20 @@ CREATE TABLE IF NOT EXISTS applications (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_pending_application
     ON applications(user_id) WHERE status = 'pending';
+CREATE TABLE IF NOT EXISTS bot_admins (
+    user_id INTEGER PRIMARY KEY,
+    added_by INTEGER NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admission_access (
+    application_id INTEGER PRIMARY KEY,
+    invite_link TEXT,
+    joined_at REAL
+);
+CREATE TABLE IF NOT EXISTS admission_join_requests (
+    user_id INTEGER PRIMARY KEY,
+    requested_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS private_searches (
     user_id INTEGER PRIMARY KEY,
     nonce TEXT NOT NULL,
