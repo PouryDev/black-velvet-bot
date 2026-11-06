@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import time
 import uuid
@@ -17,6 +18,7 @@ from app.commands import parse_command
 from app.community_store import DAY, WEEK, CommunityStore, dumps
 from app.config import Settings
 from app.db import Database
+from app.mentions import mention_user
 from app.positions import CODE_TO_POSITION, POSITION_CODES, POSITION_ORDER
 
 ACTIVE = {"member", "administrator", "creator", "restricted"}
@@ -289,7 +291,9 @@ class Community:
             await self.store.execute("DELETE FROM admission_join_requests WHERE user_id=?", (request["user_id"],))
         await self.store.emit(f"decision:{request_id}", "edit_message_caption", chat_id=query.message.chat.id,
                               message_id=query.message.message_id,
-                              caption=onboarding.card(data) + ("\n\n✅ قبول شد" if action == "accept" else "\n\n❌ رد شد"),
+                              caption=html.escape(onboarding.card(data))
+                                      + ("\n\n✅ قبول شد توسط " if action == "accept" else "\n\n❌ رد شد توسط ")
+                                      + mention_user(query.from_user), parse_mode="HTML",
                               show_caption_above_media=True, reply_markup={"inline_keyboard": []})
         await self.answer(query, "قبول شد" if action == "accept" else "رد شد")
 

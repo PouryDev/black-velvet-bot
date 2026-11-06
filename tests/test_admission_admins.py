@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -156,6 +157,40 @@ async def test_telegram_admin_without_bot_grant_cannot_decide_and_revocation_tak
     await command(env, 5, "/addadmin 901")
     await decision(env, 6, actor=901)
     assert (await env.c.store.one("SELECT status FROM applications"))["status"] == "accepted"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["accept", "reject"])
+@pytest.mark.parametrize("actor", [900, 901])
+async def test_decision_caption_mentions_actual_admin_and_escapes_profile(env, action, actor):
+    await application(env)
+    data = {**PROFILE, "name": "<b>Member & friends</b>"}
+    await env.c.store.execute("UPDATE applications SET data=? WHERE id=1", (dumps(data),))
+    if actor == 901:
+        await command(env, 1, "/addadmin 901")
+    admin = who(actor)
+    if actor == 900:
+        admin.pop("username")
+    await process(env, 2, callback_query={
+        "id": "decision", "chat_instance": "test", "data": f"admission:1:{action}", "from": admin,
+        "message": {"message_id": 77, "date": NOW, "chat": {"id": env.c.settings.admin_group_id, "type": "supergroup"}},
+    })
+    await decision(env, 3, actor=900, action="reject" if action == "accept" else "accept")
+    await flush(env)
+    edit = env.bot.edit_message_caption.await_args.kwargs
+    result = "✅ قبول شد توسط " if action == "accept" else "❌ رد شد توسط "
+    assert edit["caption"] == html.escape(onboarding.card(data)) + "\n\n" + result + (
+        f'<a href="tg://user?id={actor}">Member &lt;&amp;&gt;</a>'
+    )
+    assert edit["parse_mode"] == "HTML"
+    assert edit["show_caption_above_media"] is True
+    assert edit["reply_markup"] == {"inline_keyboard": []}
+    assert edit["chat_id"] == env.c.settings.admin_group_id and edit["message_id"] == 77
+    env.bot.edit_message_caption.assert_awaited_once()
+    assert (await env.c.store.one("SELECT decided_by FROM applications"))["decided_by"] == actor
+    if action == "reject":
+        env.bot.send_photo.assert_not_awaited()
+        assert not [call for call in env.bot.send_message.await_args_list if call.kwargs["chat_id"] == 101]
 
 
 @pytest.mark.asyncio
